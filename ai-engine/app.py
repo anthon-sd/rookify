@@ -4,8 +4,12 @@ import os
 
 app = Flask(__name__)
 
-# Initialize Stockfish - path will need to be updated based on where Stockfish is installed
-stockfish = Stockfish(path="C:\\Users\\antho\\OneDrive\\Documents\\GitHub\\rookify\\ai-engine\\stockfish-windows-x86-64-avx2.exe")
+# Initialize Stockfish - using the Linux installation
+stockfish = Stockfish(path="/usr/local/bin/stockfish")
+
+@app.route("/health")
+def health_check():
+    return jsonify({"status": "healthy", "service": "ai-engine"})
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -21,4 +25,4 @@ def analyze():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(port=5001) 
+    app.run(host="0.0.0.0", port=5000) 
