@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   frontend:
     build:
@@ -20,7 +18,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chess_coach
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/chess_coach
       - AI_ENGINE_URL=http://ai-engine:5000
     depends_on:
       - db
@@ -28,13 +26,15 @@ services:
     networks:
       - chess-network
     restart: unless-stopped
+    env_file:
+      - .env
 
   ai-engine:
     build:
       context: ./ai-engine
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - MODEL_PATH=/app/models
     volumes:

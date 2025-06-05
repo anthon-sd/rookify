@@ -9,7 +9,8 @@ import os
 from dotenv import load_dotenv
 from config.database import supabase, USERS_TABLE
 
-load_dotenv()
+# Load .env from the project root directory
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'))
 
 # Security configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")  # Change in production
