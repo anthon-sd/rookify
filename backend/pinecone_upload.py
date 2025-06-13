@@ -38,7 +38,7 @@ def prepare_vector_record(record: Dict) -> Dict:
     Prepare a record for Pinecone by adding the embedding.
     
     Args:
-        record (Dict): The record from lichess_study.py or game analysis
+        record (Dict): The record from game analysis
         
     Returns:
         Dict: Record ready for Pinecone
@@ -46,30 +46,43 @@ def prepare_vector_record(record: Dict) -> Dict:
     # Create a text representation for embedding
     metadata = record.get('metadata', record)  # Handle both formats
     text_for_embedding = f"""
-    Position: {metadata.get('fen', metadata.get('position_fen', 'N/A'))}
+    Position: {metadata.get('fen', 'N/A')}
     Move: {metadata.get('move', 'N/A')}
-    Comment: {metadata.get('comment', metadata.get('commentary', 'N/A'))}
-    Chapter: {metadata.get('chapter', 'N/A')}
-    Skill: {metadata.get('skill', 'N/A')}
-    Sub-skill: {metadata.get('sub_skill', 'N/A')}
+    Commentary: {metadata.get('commentary', 'N/A')}
     Phase: {metadata.get('phase', 'N/A')}
+    Skill Category: {metadata.get('skill_category', 'N/A')}
+    Sub-skill: {metadata.get('sub_skill', 'N/A')}
+    Opening: {metadata.get('opening_name', 'N/A')}
     """
     
     # Get embedding
     embedding = get_embedding(text_for_embedding)
     
-    # Extract user_id from the record or use a default
-    user_id = metadata.get('user_id', 'default')
-    
-    # Create enhanced metadata with additional fields
+    # Create enhanced metadata with all required fields
     enhanced_metadata = {
-        **metadata,
-        'user_id': user_id,
-        'tag': metadata.get('tag', 'position'),
-        'theme': metadata.get('theme', metadata.get('skill', '')),
+        'user_id': metadata.get('user_id', ''),
+        'game_id': metadata.get('game_id', ''),
+        'color': metadata.get('color', ''),
+        'opponent_rating': metadata.get('opponent_rating', 0),
+        'user_rating': metadata.get('user_rating', 0),
+        'result': metadata.get('result', ''),
         'timestamp': metadata.get('timestamp', ''),
-        'rating': metadata.get('rating', ''),
-        'source': metadata.get('source', 'game_analysis')
+        'source': metadata.get('source', 'chess.com'),
+        'move_number': metadata.get('move_number', 0),
+        'fen': metadata.get('fen', ''),
+        'move': metadata.get('move', ''),
+        'eval_score': metadata.get('eval_score', 0.0),
+        'stockfish_best': metadata.get('stockfish_best', ''),
+        'delta_cp': metadata.get('delta_cp', 0.0),
+        'accuracy_class': metadata.get('accuracy_class', ''),
+        'phase': metadata.get('phase', ''),
+        'skill_category': metadata.get('skill_category', ''),
+        'sub_skill': metadata.get('sub_skill', ''),
+        'score_impact': metadata.get('score_impact', 0),
+        'commentary': metadata.get('commentary', ''),
+        'opening_name': metadata.get('opening_name', ''),
+        'eco_code': metadata.get('eco_code', ''),
+        'is_tactical_puzzle': metadata.get('is_tactical_puzzle', False)
     }
 
     # Ensure all metadata values are valid types for Pinecone
@@ -78,12 +91,12 @@ def prepare_vector_record(record: Dict) -> Dict:
             enhanced_metadata[k] = json.dumps(v)
 
     return {
-        "id": record.get("id", f"{user_id}_{metadata.get('fen', metadata.get('position_fen', ''))}"),
+        "id": record.get("id", f"{metadata.get('user_id', '')}_{metadata.get('game_id', '')}_{metadata.get('move_number', 0)}"),
         "values": embedding,
         "metadata": enhanced_metadata
     }
 
-def upload_to_pinecone(records: List[Dict], index_name: str = "rookify-index"):
+def upload_to_pinecone(records: List[Dict], index_name: str = "rookify-user-data"):
     """
     Upload records to Pinecone.
     
@@ -91,18 +104,6 @@ def upload_to_pinecone(records: List[Dict], index_name: str = "rookify-index"):
         records (List[Dict]): List of records to upload
         index_name (str): Name of the Pinecone index
     """
-    # Create index if it doesn't exist
-    if index_name not in pc.list_indexes().names():
-        pc.create_index(
-            name=index_name,
-            dimension=1536,  # Dimension for text-embedding-3-small
-            metric="cosine",
-            spec=ServerlessSpec(
-                cloud='aws',
-                region='us-west-2'
-            )
-        )
-    
     # Get the index
     index = pc.Index(index_name)
     
@@ -161,10 +162,10 @@ def process_study_file(file_path: str):
 def query_vector_db(
     query_text: str,
     user_id: str = None,
-    tag: str = None,
-    theme: str = None,
+    skill_category: str = None,
+    phase: str = None,
     top_k: int = 10,
-    index_name: str = "rookify-index"
+    index_name: str = "rookify-user-data"
 ) -> List[Dict]:
     """
     Query the vector database with optional filters.
@@ -172,8 +173,8 @@ def query_vector_db(
     Args:
         query_text (str): The text to search for
         user_id (str, optional): Filter by user ID
-        tag (str, optional): Filter by tag (e.g., 'blunder', 'puzzle', 'game')
-        theme (str, optional): Filter by theme (e.g., 'forks', 'endgame')
+        skill_category (str, optional): Filter by skill category
+        phase (str, optional): Filter by game phase
         top_k (int): Number of results to return
         index_name (str): Name of the Pinecone index
         
@@ -190,10 +191,10 @@ def query_vector_db(
     filter_dict = {}
     if user_id:
         filter_dict['user_id'] = user_id
-    if tag:
-        filter_dict['tag'] = tag
-    if theme:
-        filter_dict['theme'] = theme
+    if skill_category:
+        filter_dict['skill_category'] = skill_category
+    if phase:
+        filter_dict['phase'] = phase
     
     # Query the index
     results = index.query(
