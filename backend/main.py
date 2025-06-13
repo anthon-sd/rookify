@@ -54,6 +54,18 @@ class GameAnalysisRequest(BaseModel):
     user_id: str
     depth: Optional[int] = 20
 
+class SimilarPositionsRequest(BaseModel):
+    fen: str
+    user_id: Optional[str] = None
+    skill_category: Optional[str] = None
+    phase: Optional[str] = None
+    top_k: int = 10
+
+class RecommendationRequest(BaseModel):
+    user_id: str
+    game_analysis_id: str
+    priority: int = 0
+
 # Authentication endpoints
 @app.post("/register", response_model=User)
 async def register(user: UserCreate):
@@ -192,6 +204,8 @@ async def analyze_chess_com_games(request: ChessComRequest):
         games = api.get_recent_games(request.days)
         
         all_moments = []
+        all_recommendations = []
+        
         for pgn in games:
             # Parse game into moments
             moments = parse_pgn_game(pgn)
@@ -202,15 +216,26 @@ async def analyze_chess_com_games(request: ChessComRequest):
             
             # Analyze moments
             analyzed_moments = game_analyzer.analyze_game_moments(moments)
+            
+            # Extract recommendations
+            if analyzed_moments and 'recommendations' in analyzed_moments[0]:
+                all_recommendations.extend(analyzed_moments[0]['recommendations'])
+            
             all_moments.extend(analyzed_moments)
         
         # Upload to vector database
         upload_to_pinecone(all_moments)
         
+        # Store recommendations in database
+        if all_recommendations:
+            from config.database import supabase
+            result = supabase.table('recommendations').insert(all_recommendations).execute()
+        
         return {
             "status": "success",
             "analyzed_moments": len(all_moments),
-            "games_analyzed": len(games)
+            "games_analyzed": len(games),
+            "recommendations_generated": len(all_recommendations)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -237,6 +262,110 @@ async def analyze_game(request: GameAnalysisRequest):
         return {
             "status": "success",
             "analyzed_moments": len(analyzed_moments)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/similar-positions")
+async def get_similar_positions(request: SimilarPositionsRequest):
+    """
+    Get similar positions from the vector database.
+    """
+    try:
+        from pinecone_upload import query_vector_db
+        
+        # Create a text representation of the position for querying
+        query_text = f"Position: {request.fen}"
+        
+        # Query the vector database
+        similar_positions = query_vector_db(
+            query_text=query_text,
+            user_id=request.user_id,
+            skill_category=request.skill_category,
+            phase=request.phase,
+            top_k=request.top_k
+        )
+        
+        return {
+            "status": "success",
+            "similar_positions": similar_positions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/recommendations")
+async def create_recommendation(request: RecommendationRequest):
+    """
+    Create a new recommendation for a user.
+    """
+    try:
+        from pinecone_upload import query_vector_db
+        
+        # Get similar positions for this game
+        similar_positions = query_vector_db(
+            query_text=f"Position: {request.fen}",
+            user_id=request.user_id,
+            top_k=5
+        )
+        
+        # Create recommendation based on similar positions
+        recommendation = {
+            "user_id": request.user_id,
+            "game_analysis_id": request.game_analysis_id,
+            "recommendation": "Practice this position to improve your understanding of similar positions.",
+            "priority": request.priority,
+            "status": "pending",
+            "similar_positions": similar_positions
+        }
+        
+        # Store in database
+        from config.database import supabase
+        result = supabase.table('recommendations').insert(recommendation).execute()
+        
+        return {
+            "status": "success",
+            "recommendation": result.data[0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recommendations/{user_id}")
+async def get_user_recommendations(user_id: str):
+    """
+    Get all recommendations for a user.
+    """
+    try:
+        from config.database import supabase
+        
+        result = supabase.table('recommendations')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .order('priority', desc=True)\
+            .execute()
+        
+        return {
+            "status": "success",
+            "recommendations": result.data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/recommendations/{recommendation_id}")
+async def update_recommendation_status(recommendation_id: str, status: str):
+    """
+    Update the status of a recommendation.
+    """
+    try:
+        from config.database import supabase
+        
+        result = supabase.table('recommendations')\
+            .update({'status': status})\
+            .eq('id', recommendation_id)\
+            .execute()
+        
+        return {
+            "status": "success",
+            "recommendation": result.data[0]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

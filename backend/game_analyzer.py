@@ -77,6 +77,7 @@ class GameAnalyzer:
             List[Dict]: Analyzed moments with identified key positions
         """
         analyzed_moments = []
+        recommendations = []
         
         for moment in moments:
             # Analyze the position
@@ -88,6 +89,55 @@ class GameAnalyzer:
             # Add analysis results
             analyzed_moment['analysis'] = analysis
             
+            # If this is a key moment (blunder or mistake), generate a recommendation
+            if analyzed_moment.get('tag') in ['blunder', 'mistake']:
+                recommendation = self._generate_recommendation(analyzed_moment)
+                if recommendation:
+                    recommendations.append(recommendation)
+            
             analyzed_moments.append(analyzed_moment)
         
-        return analyzed_moments 
+        # Add recommendations to the first analyzed moment
+        if analyzed_moments and recommendations:
+            analyzed_moments[0]['recommendations'] = recommendations
+        
+        return analyzed_moments
+    
+    def _generate_recommendation(self, moment: Dict) -> Optional[Dict]:
+        """
+        Generate a recommendation for a key moment.
+        
+        Args:
+            moment (Dict): The analyzed moment
+            
+        Returns:
+            Optional[Dict]: Recommendation if applicable
+        """
+        try:
+            from chess_taxonomy import map_to_taxonomy
+            
+            # Map the position to the chess taxonomy
+            skill, sub_skill, phase = map_to_taxonomy(
+                moment.get('commentary', ''),
+                moment.get('tag', '')
+            )
+            
+            # Create recommendation
+            recommendation = {
+                'user_id': moment.get('user_id', ''),
+                'game_analysis_id': moment.get('game_id', ''),
+                'recommendation': f"Practice {sub_skill} in {skill} to improve your {phase} play.",
+                'priority': 2 if moment.get('tag') == 'blunder' else 1,
+                'status': 'pending',
+                'skill_category': skill,
+                'sub_skill': sub_skill,
+                'phase': phase,
+                'position_fen': moment.get('position_fen', ''),
+                'move': moment.get('move', ''),
+                'commentary': moment.get('commentary', '')
+            }
+            
+            return recommendation
+        except Exception as e:
+            print(f"Error generating recommendation: {e}")
+            return None 
