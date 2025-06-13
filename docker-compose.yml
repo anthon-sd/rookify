@@ -1,15 +1,18 @@
+version: '3.8'
+
 services:
   frontend:
     build:
       context: ./frontend/chess-coach-frontend
       dockerfile: Dockerfile
     ports:
-      - "80:80"
-    depends_on:
-      - backend
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
     networks:
       - chess-network
-    restart: unless-stopped
+    depends_on:
+      - backend
 
   backend:
     build:
@@ -18,49 +21,46 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/chess_coach
-      - AI_ENGINE_URL=http://ai-engine:5000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chess_coach
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       - db
       - ai-engine
     networks:
       - chess-network
-    restart: unless-stopped
-    env_file:
-      - .env
 
   ai-engine:
     build:
       context: ./ai-engine
       dockerfile: Dockerfile
     ports:
-      - "5001:5000"
+      - "5000:5000"
     environment:
-      - MODEL_PATH=/app/models
+      - MODEL_PATH=/app/models/chess_model.pkl
     volumes:
-      - ai-models:/app/models
+      - ./ai-engine/models:/app/models
     networks:
       - chess-network
-    restart: unless-stopped
 
   db:
-    image: postgres:15-alpine
+    image: postgres:15
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=chess_coach
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - POSTGRES_DB=chess_db
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - chess-network
-    restart: unless-stopped
 
 networks:
   chess-network:
     driver: bridge
 
 volumes:
-  postgres-data:
-  ai-models: 
+  postgres_data: 

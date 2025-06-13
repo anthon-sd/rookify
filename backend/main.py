@@ -14,6 +14,10 @@ from utils.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from config.database import supabase, USERS_TABLE
+from chess_com import ChessComAPI, parse_pgn_game
+from game_analyzer import GameAnalyzer
+from pinecone_upload import upload_to_pinecone
+from typing import Optional
 
 app = FastAPI(title="Chess Coach Backend")
 
@@ -33,10 +37,22 @@ except RuntimeError as e:
     print(f"Warning: Failed to initialize Stockfish: {e}")
     chess_analyzer = None
 
+# Initialize the game analyzer
+game_analyzer = GameAnalyzer()
+
 class AnalysisRequest(BaseModel):
     fen: str = None
     pgn: str = None
     depth: int = 20
+
+class ChessComRequest(BaseModel):
+    username: str
+    days: Optional[int] = 30
+
+class GameAnalysisRequest(BaseModel):
+    pgn: str
+    user_id: str
+    depth: Optional[int] = 20
 
 # Authentication endpoints
 @app.post("/register", response_model=User)
@@ -146,6 +162,84 @@ async def analyze_position(request: AnalysisRequest):
         return chess_analyzer.analyze_pgn(request.pgn, request.depth)
     else:
         raise HTTPException(status_code=400, detail="Either FEN or PGN must be provided")
+
+@app.post("/chess-com/connect")
+async def connect_chess_com(request: ChessComRequest):
+    """
+    Connect to Chess.com and fetch user's recent games.
+    """
+    try:
+        api = ChessComAPI(request.username)
+        profile = api.get_user_profile()
+        games = api.get_recent_games(request.days)
+        
+        return {
+            "status": "success",
+            "profile": profile,
+            "games_count": len(games)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chess-com/analyze-games")
+async def analyze_chess_com_games(request: ChessComRequest):
+    """
+    Analyze user's recent games from Chess.com.
+    """
+    try:
+        # Get games from Chess.com
+        api = ChessComAPI(request.username)
+        games = api.get_recent_games(request.days)
+        
+        all_moments = []
+        for pgn in games:
+            # Parse game into moments
+            moments = parse_pgn_game(pgn)
+            
+            # Update user_id for all moments
+            for moment in moments:
+                moment['user_id'] = request.username
+            
+            # Analyze moments
+            analyzed_moments = game_analyzer.analyze_game_moments(moments)
+            all_moments.extend(analyzed_moments)
+        
+        # Upload to vector database
+        upload_to_pinecone(all_moments)
+        
+        return {
+            "status": "success",
+            "analyzed_moments": len(all_moments),
+            "games_analyzed": len(games)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-game")
+async def analyze_game(request: GameAnalysisRequest):
+    """
+    Analyze a single game and store key moments in the vector database.
+    """
+    try:
+        # Parse game into moments
+        moments = parse_pgn_game(request.pgn)
+        
+        # Update user_id for all moments
+        for moment in moments:
+            moment['user_id'] = request.user_id
+        
+        # Analyze moments
+        analyzed_moments = game_analyzer.analyze_game_moments(moments, request.depth)
+        
+        # Upload to vector database
+        upload_to_pinecone(analyzed_moments)
+        
+        return {
+            "status": "success",
+            "analyzed_moments": len(analyzed_moments)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
