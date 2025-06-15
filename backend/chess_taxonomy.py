@@ -1,5 +1,7 @@
 from typing import Dict, List, Tuple, Optional
 import re
+import chess
+from pattern_recognition import PatternRecognizer
 
 # Chess taxonomy data structure
 CHESS_TAXONOMY = {
@@ -317,60 +319,123 @@ CHESS_TAXONOMY = {
 }
 
 def get_phase_from_taxonomy(skill: str, sub_skill: str) -> str:
-    """
-    Get the phase (Opening/Middlegame/Endgame/All) for a given skill and sub-skill.
-    """
-    if skill in CHESS_TAXONOMY and sub_skill in CHESS_TAXONOMY[skill]:
-        return CHESS_TAXONOMY[skill][sub_skill]
-    return "All"
+    """Get the phase for a skill from the taxonomy."""
+    return CHESS_TAXONOMY.get(skill, {}).get(sub_skill, "All")
 
-def find_matching_skills(comment: str, chapter_name: str) -> List[Tuple[str, str]]:
+def analyze_position_patterns(fen: str, move: str, eval_change: float) -> List[Tuple[str, str, float]]:
     """
-    Find matching skills and sub-skills from the taxonomy based on the comment and chapter name.
-    Returns a list of (skill, sub-skill) tuples.
-    """
-    matches = []
-    text = f"{comment} {chapter_name}".lower()
+    Analyze a position for patterns and map them to skills.
     
-    # Create a list of all skills and sub-skills for matching
+    Args:
+        fen (str): FEN string of the position
+        move (str): The move made
+        eval_change (float): Change in evaluation
+        
+    Returns:
+        List[Tuple[str, str, float]]: List of (skill, sub_skill, confidence) tuples
+    """
+    board = chess.Board(fen)
+    pattern_recognizer = PatternRecognizer()
+    
+    # Get patterns from the position
+    patterns = pattern_recognizer.analyze_position(board)
+    
+    # Map patterns to skills
+    skill_matches = []
+    for pattern in patterns:
+        # Get confidence for this pattern in this position
+        confidence = pattern_recognizer.get_pattern_confidence(pattern, board)
+        
+        # Add all related skills from the pattern
+        for skill, sub_skill in pattern.related_skills:
+            skill_matches.append((skill, sub_skill, confidence))
+    
+    return skill_matches
+
+def find_matching_skills(
+    comment: str,
+    chapter_name: str,
+    fen: str = None,
+    move: str = None,
+    eval_change: float = None
+) -> List[Tuple[str, str, float]]:
+    """
+    Find matching skills based on commentary, position, and evaluation.
+    
+    Args:
+        comment (str): Commentary about the position/move
+        chapter_name (str): Name of the chapter/section
+        fen (str, optional): FEN string of the position
+        move (str, optional): The move made
+        eval_change (float, optional): Change in evaluation
+        
+    Returns:
+        List[Tuple[str, str, float]]: List of (skill, sub_skill, confidence) tuples
+    """
+    skill_matches = []
+    
+    # Get pattern-based matches if position information is available
+    if fen and move:
+        pattern_matches = analyze_position_patterns(fen, move, eval_change or 0)
+        skill_matches.extend(pattern_matches)
+    
+    # Get text-based matches from commentary
     for skill, sub_skills in CHESS_TAXONOMY.items():
-        for sub_skill in sub_skills.keys():
-            # Create patterns to match the skill/sub-skill
-            skill_pattern = re.compile(r'\b' + re.escape(skill.lower()) + r'\b')
-            sub_skill_pattern = re.compile(r'\b' + re.escape(sub_skill.lower()) + r'\b')
-            
-            # Check if either the skill or sub-skill is mentioned
-            if skill_pattern.search(text) or sub_skill_pattern.search(text):
-                matches.append((skill, sub_skill))
+        for sub_skill in sub_skills:
+            # Check if sub_skill is mentioned in the comment
+            if sub_skill.lower() in comment.lower():
+                # Calculate confidence based on context
+                confidence = 0.7  # Base confidence
+                
+                # Increase confidence if the skill is mentioned in the chapter name
+                if skill.lower() in chapter_name.lower():
+                    confidence += 0.2
+                
+                # Adjust confidence based on evaluation change
+                if eval_change is not None:
+                    if abs(eval_change) > 300:  # Significant evaluation change
+                        confidence += 0.1
+                
+                skill_matches.append((skill, sub_skill, min(confidence, 1.0)))
     
-    return matches
+    return skill_matches
 
-def map_to_taxonomy(comment: str, chapter_name: str) -> Tuple[str, str, str]:
+def map_to_taxonomy(
+    comment: str,
+    chapter_name: str,
+    fen: str = None,
+    move: str = None,
+    eval_change: float = None
+) -> List[Tuple[str, str, str, float]]:
     """
-    Map a comment and chapter name to the chess taxonomy.
-    Returns: (skill, sub_skill, phase)
+    Map a position/move to the chess taxonomy.
+    
+    Args:
+        comment (str): Commentary about the position/move
+        chapter_name (str): Name of the chapter/section
+        fen (str, optional): FEN string of the position
+        move (str, optional): The move made
+        eval_change (float, optional): Change in evaluation
+        
+    Returns:
+        List[Tuple[str, str, str, float]]: List of (skill, sub_skill, phase, confidence) tuples
     """
-    if not comment and not chapter_name:
-        return "Rules of the game", "Piece movements", "All"
+    skill_matches = find_matching_skills(comment, chapter_name, fen, move, eval_change)
     
-    matches = find_matching_skills(comment, chapter_name)
+    # Convert to final format with phases
+    result = []
+    for skill, sub_skill, confidence in skill_matches:
+        phase = get_phase_from_taxonomy(skill, sub_skill)
+        result.append((skill, sub_skill, phase, confidence))
     
-    if not matches:
-        # Default to basic positional ideas if no specific match is found
-        return "Basic positional ideas", "Holes/outposts", "Middlegame"
-    
-    # Use the first match (could be enhanced to use the best match)
-    skill, sub_skill = matches[0]
-    phase = get_phase_from_taxonomy(skill, sub_skill)
-    
-    return skill, sub_skill, phase
+    return result
 
 def get_all_skills() -> List[str]:
-    """Get a list of all skills in the taxonomy."""
+    """Get all skill categories from the taxonomy."""
     return list(CHESS_TAXONOMY.keys())
 
 def get_sub_skills(skill: str) -> List[str]:
-    """Get a list of all sub-skills for a given skill."""
+    """Get all sub-skills for a given skill category."""
     return list(CHESS_TAXONOMY.get(skill, {}).keys())
 
 def get_phase(skill: str, sub_skill: str) -> str:

@@ -7,10 +7,14 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV STOCKFISH_PATH=/usr/games/stockfish
 
 # Install system dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc iputils-ping \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        iputils-ping \
+        stockfish \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
