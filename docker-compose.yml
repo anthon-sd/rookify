@@ -39,6 +39,7 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MODEL_PATH=/app/models/chess_model.pkl
     volumes:
       - ./ai-engine/models:/app/models
