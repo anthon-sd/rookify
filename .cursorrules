@@ -1,0 +1,126 @@
+# Rookify Chess Coaching Platform - Cursor Rules
+
+## Project Overview
+Rookify is a chess coaching platform with microservices architecture designed to help players improve through AI-powered game analysis and personalized recommendations.
+
+## Architecture
+- **Frontend**: React 18.2 + TypeScript (port 3000)
+- **Backend**: FastAPI (Python) + Node.js/Express hybrid (port 8000) 
+- **AI Engine**: Flask + Stockfish + OpenAI GPT-4 (port 5000)
+- **Database**: PostgreSQL + Supabase + Pinecone vector DB
+- **Deployment**: Docker Compose with containerized services
+
+## Coding Standards
+
+### Python (Backend & AI Engine)
+- Use FastAPI for main backend endpoints
+- Follow PEP 8 style guidelines
+- Use type hints for all function signatures
+- Use Pydantic models for request/response validation
+- Handle exceptions with proper HTTP status codes
+- Use async/await for database operations
+- Import order: standard library, third-party, local imports
+
+### JavaScript/TypeScript (Frontend)
+- Use functional components with hooks
+- Prefer TypeScript over JavaScript for new files
+- Use React Router for navigation
+- Implement proper error boundaries
+- Use Supabase client for authentication
+- Follow React best practices for state management
+- Use chess.js for chess logic validation
+
+### Database
+- Use UUID primary keys for all tables
+- Include created_at/updated_at timestamps
+- Use proper foreign key relationships
+- Index frequently queried columns
+- Use Supabase for auth-related tables
+- Use Pinecone for vector similarity searches
+
+## Key Integrations
+
+### Chess Analysis Pipeline
+1. Import games via Chess.com API or PGN upload
+2. Parse games into key moments using python-chess
+3. Analyze with Stockfish engine (depth 20 default)
+4. Generate AI commentary using OpenAI GPT-4
+5. Store position embeddings in Pinecone
+6. Create personalized recommendations
+
+### Authentication Flow
+- Use Supabase for user registration/login
+- JWT tokens for API authentication  
+- Protected routes in React frontend
+- Middleware validation in backend
+
+### Vector Database Usage
+- Store chess positions as embeddings using OpenAI text-embedding-3-small
+- Query similar positions for recommendations
+- Filter by user_id, skill_category, phase
+- Batch upload in groups of 100 records
+
+## File Organization
+- `/frontend/chess-coach-frontend/` - React application
+- `/backend/` - Python FastAPI backend + Node.js routes
+- `/ai-engine/` - Flask chess analysis service
+- `/backend/src/` - Node.js Express server
+- Docker Compose orchestrates all services
+
+## Common Patterns
+
+### API Endpoints
+- Use FastAPI dependency injection for authentication
+- Return consistent JSON response format
+- Include proper error handling with HTTPException
+- Use Pydantic models for request validation
+
+### Chess Analysis
+- Always validate FEN/PGN input before processing
+- Use chess.Board for position manipulation
+- Store both engine evaluation and AI commentary
+- Classify moves: Brilliant, Great, Good, Inaccuracy, Mistake, Blunder
+
+### Frontend Components
+- Use AuthContext for user state management
+- Implement loading states for async operations
+- Use react-chessboard for chess UI
+- Handle chess move validation client-side
+
+## Environment Variables
+- OPENAI_API_KEY - for AI analysis and embeddings
+- PINECONE_API_KEY - for vector database
+- SUPABASE_URL/SUPABASE_SERVICE_KEY - for auth and database
+- DATABASE_URL - for PostgreSQL connection
+
+## Testing
+- Use pytest for Python backend tests
+- Use Jest/React Testing Library for frontend
+- Test chess analysis logic with known positions
+- Mock external API calls in tests
+
+## Performance Considerations
+- Batch Pinecone operations (100 records max)
+- Use appropriate Stockfish depth based on use case
+- Cache frequent database queries
+- Optimize chess position analysis for real-time use
+
+## Security
+- Validate all chess inputs (FEN/PGN)
+- Use parameterized queries for database operations
+- Sanitize user inputs
+- Implement rate limiting for expensive operations
+- Use CORS appropriately for production
+
+## Docker & Deployment
+- Each service has its own Dockerfile
+- Use docker-compose.yml for local development
+- Services communicate via chess-network bridge
+- Persist database data with named volumes
+
+When working on this project:
+1. Always consider the chess domain context
+2. Maintain consistency between Python and JavaScript code styles  
+3. Test chess logic thoroughly with edge cases
+4. Consider user experience for chess players of all levels
+5. Optimize for both accuracy and performance in analysis

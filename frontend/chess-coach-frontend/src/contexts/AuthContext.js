@@ -26,10 +26,10 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = (email, password) => supabase.auth.signIn({ email, password });
+  const login = (email, password) => supabase.auth.signInWithPassword({ email, password });
   const signup = (email, password) => supabase.auth.signUp({ email, password });
   const logout = () => supabase.auth.signOut();
-  const signInWithProvider = (provider) => supabase.auth.signIn({ provider });
+  const signInWithProvider = (provider) => supabase.auth.signInWithOAuth({ provider });
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, logout, signInWithProvider }}>
