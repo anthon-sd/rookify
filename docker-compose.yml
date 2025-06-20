@@ -1,14 +1,15 @@
-version: '3.8'
-
 services:
   frontend:
     build:
       context: ./frontend/chess-coach-frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:80"
     environment:
+      # Frontend runs in browser, so API calls go to localhost from user's perspective
       - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_SUPABASE_URL=${SUPABASE_URL}
+      - REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     networks:
       - chess-network
     depends_on:
@@ -21,13 +22,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chess_coach
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
-      - db
       - ai-engine
     networks:
       - chess-network
@@ -46,22 +45,6 @@ services:
     networks:
       - chess-network
 
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=chess_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - chess-network
-
 networks:
   chess-network:
-    driver: bridge
-
-volumes:
-  postgres_data: 
+    driver: bridge 
