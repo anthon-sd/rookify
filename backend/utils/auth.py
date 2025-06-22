@@ -37,23 +37,45 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
+    print(f"AUTH DEBUG: get_current_user called")
+    print(f"AUTH DEBUG: token length: {len(token) if token else 0}")
+    print(f"AUTH DEBUG: SECRET_KEY: {SECRET_KEY}")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        print("AUTH DEBUG: No token provided")
+        raise credentials_exception
+    
     try:
+        print(f"AUTH DEBUG: Decoding JWT with secret: {SECRET_KEY}")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        print(f"AUTH DEBUG: Token decoded, email: {email}")
         if email is None:
+            print("AUTH DEBUG: No email in token payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        print(f"AUTH DEBUG: JWT decode error: {str(e)}")
+        print(f"AUTH DEBUG: Token: {token}")
         raise credentials_exception
 
     # Fetch user from Supabase
-    result = supabase.table(USERS_TABLE).select("*").eq("email", email).single().execute()
-    if not result.data:
-        raise credentials_exception
+    print(f"AUTH DEBUG: Fetching user from database: {email}")
+    try:
+        result = supabase.table(USERS_TABLE).select("*").eq("email", email).single().execute()
+        print(f"AUTH DEBUG: Database result: {bool(result.data)}")
+        if not result.data:
+            print(f"AUTH DEBUG: User not found: {email}")
+            raise credentials_exception
 
-    user = result.data
-    return UserInDB(**user) 
+        user = result.data
+        print(f"AUTH DEBUG: User found: {user.get('id')}")
+        return UserInDB(**user)
+    except Exception as db_error:
+        print(f"AUTH DEBUG: Database error: {str(db_error)}")
+        raise credentials_exception 

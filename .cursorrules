@@ -118,6 +118,10 @@ Rookify is a chess coaching platform with microservices architecture designed to
 - Services communicate via chess-network bridge
 - Persist database data with named volumes
 
+## Development Workflow
+- **Environment Files**: The .env file is globally ignored. NEVER attempt to read, modify, or create .env files. All environment variable configuration must be handled manually by the user.
+- **Service Execution**: Always use Docker containers when running application services. Use `docker-compose up` or individual Docker commands rather than running services directly on the host system.
+
 When working on this project:
 1. Always consider the chess domain context
 2. Maintain consistency between Python and JavaScript code styles  

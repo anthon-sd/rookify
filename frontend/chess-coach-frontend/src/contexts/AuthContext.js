@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import supabase from '../supabaseClient';
+import backendApi from '../services/backendApi';
 
 const AuthContext = createContext();
 
@@ -8,28 +8,62 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
+    // Check if user is already authenticated with backend
+    if (backendApi.isAuthenticated()) {
+      setUser(backendApi.user);
+      setLoading(false);
+    } else {
+      setLoading(false);
+    }
   }, []);
 
-  const login = (email, password) => supabase.auth.signInWithPassword({ email, password });
-  const signup = (email, password) => supabase.auth.signUp({ email, password });
-  const logout = () => supabase.auth.signOut();
-  const signInWithProvider = (provider) => supabase.auth.signInWithOAuth({ provider });
+  const login = async (email, password) => {
+    try {
+      console.log('🔐 AuthContext: Starting login process...');
+      const result = await backendApi.loginUser(email, password);
+      console.log('✅ AuthContext: Backend login successful, updating user state');
+      console.log('User data:', result.user);
+      
+      setUser(result.user);
+      console.log('✅ AuthContext: User state updated');
+      
+      return { data: { user: result.user }, error: null };
+    } catch (error) {
+      console.error('❌ AuthContext: Login failed:', error);
+      return { data: null, error: { message: error.message } };
+    }
+  };
+
+  const signup = async (email, password) => {
+    try {
+      await backendApi.registerUser({
+        email,
+        username: email.split('@')[0],
+        password,
+        rating: 1500,
+        playstyle: 'balanced',
+        rating_progress: []
+      });
+      
+      // Auto-login after registration
+      const result = await backendApi.loginUser(email, password);
+      setUser(result.user);
+      return { data: { user: result.user }, error: null };
+    } catch (error) {
+      return { data: null, error: { message: error.message } };
+    }
+  };
+
+  const logout = async () => {
+    backendApi.logout();
+    setUser(null);
+    return { error: null };
+  };
+
+  const signInWithProvider = async (provider) => {
+    // OAuth not implemented with backend auth
+    return { data: null, error: { message: 'OAuth not available' } };
+  };
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, logout, signInWithProvider }}>

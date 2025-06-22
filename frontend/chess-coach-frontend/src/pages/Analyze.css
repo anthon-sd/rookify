@@ -62,10 +62,11 @@
 /* Game List Sidebar */
 .game-list-sidebar {
   background: white;
-  padding: 1rem;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   height: fit-content;
+  max-height: 80vh;
+  overflow: hidden;
 }
 
 .game-item {
@@ -87,6 +88,13 @@
 
 /* Analysis Panel */
 .analysis-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.analysis-panel-grid {
   display: grid;
   grid-template-columns: 1fr 300px;
   gap: 2rem;
@@ -390,5 +398,194 @@
   
   .sync-meta {
     justify-content: space-between;
+  }
+}
+
+/* Game Analysis Components */
+.game-info-header {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.game-title h3 {
+  margin: 0 0 0.5rem 0;
+  color: #2D3748;
+  font-size: 1.3rem;
+}
+
+.game-meta-info {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.game-result {
+  font-weight: bold;
+  font-family: monospace;
+  color: #4A5568;
+  background: #EDF2F7;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.game-date,
+.game-platform,
+.game-opening {
+  font-size: 0.9rem;
+  color: #718096;
+  background: #F7FAFC;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #3182CE;
+}
+
+.move-counter {
+  font-weight: 500;
+  color: #4A5568;
+  margin: 0 1rem;
+}
+
+.move-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.key-moments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.key-moment-item {
+  padding: 0.75rem;
+  background: #F7FAFC;
+  border-radius: 6px;
+  border-left: 4px solid #3182CE;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.moment-move {
+  font-weight: 600;
+  color: #2D3748;
+  font-size: 0.9rem;
+}
+
+.moment-type {
+  color: #4A5568;
+  font-size: 0.85rem;
+}
+
+.moment-eval {
+  font-family: monospace;
+  font-weight: 500;
+  color: #3182CE;
+  font-size: 0.8rem;
+}
+
+.current-position-info {
+  background: #F7FAFC;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.position-fen {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #4A5568;
+  margin-bottom: 1rem;
+  word-break: break-all;
+}
+
+.analyze-position-btn {
+  background: #3182CE;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  width: 100%;
+  transition: background-color 0.2s;
+}
+
+.analyze-position-btn:hover {
+  background: #2C5282;
+}
+
+.no-game-selected {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.placeholder-content {
+  text-align: center;
+  color: #718096;
+  max-width: 400px;
+}
+
+.placeholder-content h3 {
+  margin: 0 0 1rem 0;
+  color: #4A5568;
+}
+
+.placeholder-content p {
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.auth-hint {
+  color: #E53E3E !important;
+  font-weight: 500;
+}
+
+/* Analysis Container Grid Updates */
+@media (max-width: 1200px) {
+  .analysis-panel-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .game-meta-info {
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .game-info-header {
+    padding: 1rem;
+  }
+  
+  .game-title h3 {
+    font-size: 1.1rem;
+  }
+  
+  .game-meta-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .key-moment-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 } 

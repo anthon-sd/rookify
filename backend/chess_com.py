@@ -40,8 +40,10 @@ class ChessComAPI:
         """
         url = f"{self.base_url}/{self.username}/{endpoint}"
         try:
-            response = self.session.get(url, params=params)
+            print(f"🌐 CHESS.COM: Making request to {url}")
+            response = self.session.get(url, params=params, timeout=30)  # 30 second timeout
             response.raise_for_status()
+            print(f"✅ CHESS.COM: Request successful ({response.status_code})")
             
             # Add a small delay to respect rate limits
             time.sleep(0.1)
@@ -132,22 +134,74 @@ class ChessComAPI:
         """
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
+        return self.get_games_by_date_range(start_date, end_date)
+    
+    def get_games_by_date_range(self, start_date: datetime, end_date: datetime) -> List[str]:
+        """
+        Get user's games within a specific date range.
         
+        Args:
+            start_date (datetime): Start date for games
+            end_date (datetime): End date for games
+            
+        Returns:
+            List[str]: List of PGN strings
+        """
+        print(f"🔍 CHESS.COM: Starting date range fetch for {start_date.date()} to {end_date.date()}")
         all_games = []
         current_date = start_date
         
         while current_date <= end_date:
             year = current_date.year
             month = current_date.month
+            print(f"📅 CHESS.COM: Fetching games for {year}-{month:02d}")
             try:
                 games = self.get_monthly_games(year, month)
-                all_games.extend(games)
+                print(f"✅ CHESS.COM: Retrieved {len(games)} games for {year}-{month:02d}")
+                
+                # Filter games by date range
+                filtered_games = []
+                for i, pgn in enumerate(games):
+                    if i % 10 == 0:  # Progress update every 10 games
+                        print(f"🔍 CHESS.COM: Processing game {i+1}/{len(games)}")
+                    
+                    game_date = self._extract_game_date(pgn)
+                    if game_date and start_date.date() <= game_date <= end_date.date():
+                        filtered_games.append(pgn)
+                
+                print(f"✅ CHESS.COM: Filtered to {len(filtered_games)} games in date range for {year}-{month:02d}")
+                all_games.extend(filtered_games)
+                
             except ChessComAPIError as e:
-                print(f"Warning: Could not fetch games for {year}-{month:02d}: {str(e)}")
+                print(f"⚠️ CHESS.COM: Could not fetch games for {year}-{month:02d}: {str(e)}")
+            except Exception as e:
+                print(f"💥 CHESS.COM: Unexpected error for {year}-{month:02d}: {str(e)}")
             
             current_date = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1)
         
+        print(f"🎯 CHESS.COM: Final result: {len(all_games)} total games in date range")
         return all_games
+    
+    def _extract_game_date(self, pgn: str) -> Optional[datetime.date]:
+        """
+        Extract game date from PGN string.
+        
+        Args:
+            pgn (str): PGN string
+            
+        Returns:
+            datetime.date: Game date or None if not found
+        """
+        try:
+            import re
+            # Look for Date header in PGN: [Date "2023.12.31"]
+            date_match = re.search(r'\[Date "(\d{4}\.\d{2}\.\d{2})"\]', pgn)
+            if date_match:
+                date_str = date_match.group(1).replace('.', '-')
+                return datetime.fromisoformat(date_str).date()
+            return None
+        except Exception:
+            return None
 
 def parse_pgn_game(pgn: str) -> List[Dict]:
     """

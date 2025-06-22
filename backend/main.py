@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, status, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -21,16 +21,34 @@ from game_analyzer import GameAnalyzer
 from pinecone_upload import upload_to_pinecone
 from utils.rate_limiter import check_sync_rate_limit, get_rate_limiter_for_platform
 from typing import Optional
+import json
+import requests
+
+# Configuration
+AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://ai-engine:5000")
 
 app = FastAPI(title="Chess Coach Backend")
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"REQUEST: {request.method} {request.url}")
+    auth_header = request.headers.get("authorization", "NONE")
+    print(f"AUTH: {auth_header[:50] if auth_header != 'NONE' else 'NO AUTH HEADER'}")
+    
+    response = await call_next(request)
+    print(f"RESPONSE: {response.status_code}")
+    return response
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://frontend:3000"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Initialize chess analyzer
@@ -72,41 +90,96 @@ class RecommendationRequest(BaseModel):
 class SyncRequest(BaseModel):
     platform: str  # "chess.com" or "lichess"
     username: str
-    months: int = 1  # How many months back to sync
+    months: int = 1  # How many months back to sync (for backward compatibility)
+    fromDate: Optional[str] = None  # Start date for sync (YYYY-MM-DD format)
+    toDate: Optional[str] = None  # End date for sync (YYYY-MM-DD format)
     lichess_token: Optional[str] = None  # For Lichess private games
+
+# Helper functions
+def extract_game_date_from_game(game: dict) -> Optional[datetime]:
+    """Extract game date from Chess.com game data."""
+    try:
+        # Try to extract from PGN first
+        pgn = game.get('pgn', '')
+        if '[Date "' in pgn:
+            import re
+            date_match = re.search(r'\[Date "(\d{4}\.\d{2}\.\d{2})"\]', pgn)
+            if date_match:
+                date_str = date_match.group(1).replace('.', '-')
+                return datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+        
+        # Try to extract from URL or other metadata
+        if 'url' in game:
+            # Chess.com URLs often contain date info: /game/live/12345678901234567890?moves=...
+            # For now, return None and rely on API filtering
+            pass
+        
+        return None
+    except Exception:
+        return None
 
 # Authentication endpoints
 @app.post("/register", response_model=User)
 async def register(user: UserCreate):
-    # Check if user already exists
-    existing_user = supabase.table(USERS_TABLE).select("*").eq("email", user.email).execute()
-    if existing_user.data:
+    try:
+        # Check if user already exists
+        existing_user = supabase.table(USERS_TABLE).select("*").eq("email", user.email).execute()
+        if existing_user.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Check if username already exists
+        existing_username = supabase.table(USERS_TABLE).select("*").eq("username", user.username).execute()
+        if existing_username.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+        
+        # Create new user
+        hashed_password = get_password_hash(user.password)
+        now = datetime.utcnow().isoformat()
+        rating_progress = [{"rating": user.rating, "timestamp": now}]
+        user_data = {
+            "email": user.email,
+            "username": user.username,
+            "hashed_password": hashed_password,
+            "rating": user.rating,
+            "playstyle": user.playstyle,
+            "rating_progress": rating_progress
+        }
+        
+        result = supabase.table(USERS_TABLE).insert(user_data).execute()
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not create user"
+            )
+        
+        return result.data[0]
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Handle database constraint errors and other exceptions
+        error_message = str(e)
+        if "duplicate key value violates unique constraint" in error_message:
+            if "email" in error_message:
+                detail = "Email already registered"
+            elif "username" in error_message:
+                detail = "Username already taken"
+            else:
+                detail = "Account with this information already exists"
+        else:
+            detail = f"Database error: {error_message}"
+            
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail=detail
         )
-    
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    now = datetime.utcnow().isoformat()
-    rating_progress = [{"rating": user.rating, "timestamp": now}]
-    user_data = {
-        "email": user.email,
-        "username": user.username,
-        "hashed_password": hashed_password,
-        "rating": user.rating,
-        "playstyle": user.playstyle,
-        "rating_progress": rating_progress
-    }
-    
-    result = supabase.table(USERS_TABLE).insert(user_data).execute()
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create user"
-        )
-    
-    return result.data[0]
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -135,6 +208,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.get("/users/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
+    print(f"👤 /users/me called for user: {current_user.id} - {current_user.email}")
     return current_user
 
 @app.put("/users/me", response_model=User)
@@ -171,6 +245,25 @@ async def update_user(
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "backend"}
+
+@app.get("/debug")
+async def debug_endpoint():
+    print("DEBUG: Test endpoint called - debugging is working!")
+    return {"debug": "working", "message": "Debug endpoint reached"}
+
+@app.get("/debug-headers")
+async def debug_headers_endpoint(request: Request):
+    print("DEBUG: Headers endpoint called")
+    headers = dict(request.headers)
+    print(f"DEBUG: All headers: {headers}")
+    auth_header = headers.get('authorization', 'NONE')
+    print(f"DEBUG: Authorization header: {auth_header}")
+    return {"headers": headers, "auth": auth_header}
+
+@app.get("/debug-auth")
+async def debug_auth_endpoint(current_user: User = Depends(get_current_user)):
+    print("DEBUG: Auth endpoint reached - user authenticated!")
+    return {"debug": "auth working", "user_id": current_user.id}
 
 @app.post("/analyze")
 async def analyze_position(request: AnalysisRequest):
@@ -391,6 +484,10 @@ async def sync_platform_games(
     Sync games from chess platform for analysis.
     Returns immediately and processes in background.
     """
+    # Debug: Log what we received from frontend
+    print(f"🔍 SYNC DEBUG: Received request - platform: {request.platform}, username: {request.username}")
+    print(f"🔍 SYNC DEBUG: Date params - fromDate: '{request.fromDate}', toDate: '{request.toDate}', months: {request.months}")
+    
     # Verify user owns this account
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
@@ -450,21 +547,48 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
             'updated_at': datetime.now(timezone.utc).isoformat()
         }).eq('id', sync_job_id).execute()
         
+        # Debug: Log what date parameters we received
+        print(f"🔍 DEBUG: fromDate = '{request.fromDate}', toDate = '{request.toDate}', months = {request.months}")
+        
+        # Determine date range for fetching games
+        if request.fromDate and request.toDate:
+            # Use specific date range if provided
+            since = datetime.fromisoformat(request.fromDate).replace(tzinfo=timezone.utc)
+            until = datetime.fromisoformat(request.toDate).replace(tzinfo=timezone.utc)
+            print(f"✅ Using specific date range: {since.date()} to {until.date()}")
+        else:
+            # Fall back to months-based calculation
+            until = datetime.now(timezone.utc)
+            since = until - timedelta(days=30 * request.months)
+            print(f"⚠️ Fallback to months-based: {since.date()} to {until.date()} (fromDate: {request.fromDate}, toDate: {request.toDate})")
+        
         # Fetch games based on platform
         games = []
         if request.platform == "chess.com":
             api = ChessComAPI(request.username)
-            # Get games from the last N months
-            games = api.get_player_games_by_month_range(
-                request.username,
-                months_back=request.months
-            )
+            print(f"♟️ Fetching Chess.com games from {since.date()} to {until.date()}")
+            
+            # Get PGN strings from Chess.com using specific date range
+            pgn_games = api.get_games_by_date_range(since, until)
+            
+            # Convert PGN strings to game dictionaries for consistency
+            games = []
+            for i, pgn in enumerate(pgn_games):
+                # Extract basic info from PGN for URL (Chess.com doesn't provide URLs in API)
+                game_dict = {
+                    'pgn': pgn,
+                    'url': f"https://chess.com/game/{request.username}/{i+1}",  # Placeholder URL
+                    'platform': 'chess.com'
+                }
+                games.append(game_dict)
+            
         elif request.platform == "lichess":
             api = LichessAPI(token=request.lichess_token)
-            since = datetime.now(timezone.utc) - timedelta(days=30 * request.months)
+            print(f"🏆 Fetching Lichess games from {since} to {until}")
             games = api.get_user_games(
                 request.username,
                 since=since,
+                until=until,
                 max_games=100
             )
         else:
@@ -585,6 +709,169 @@ async def get_user_sync_jobs(user_id: str, current_user: User = Depends(get_curr
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/games/{user_id}")
+async def get_user_games(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    platform: Optional[str] = Query(None, regex=r"^(chess\.com|lichess)$")
+):
+    """
+    Get analyzed games for a user with pagination
+    """
+    try:
+        print(f"🎮 Fetching games for user: {user_id}")
+        print(f"📄 Pagination: limit={limit}, offset={offset}, platform={platform}")
+        print(f"👤 Current user: {current_user.id}")
+        
+        # Verify user can access this data
+        if current_user.id != user_id:
+            print(f"❌ Access denied: {current_user.id} != {user_id}")
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Build query - only select columns that exist
+        query = supabase.table('game_analysis').select(
+            "id, user_id, game_url, platform, pgn, key_moments"
+        ).eq('user_id', user_id)
+        
+        # Add platform filter if specified
+        if platform:
+            query = query.eq('platform', platform)
+        
+        # Add pagination and ordering - use id for ordering since created_at doesn't exist
+        query = query.order('id', desc=True).range(offset, offset + limit - 1)
+        
+        print(f"🔍 Executing query...")
+        response = query.execute()
+        
+        print(f"📊 Query result: {len(response.data) if response.data else 0} games found")
+        
+        if response.data is None:
+            print("⚠️ No data returned from query")
+            return {"games": [], "total": 0}
+        
+        # Get total count for pagination
+        count_response = supabase.table('game_analysis').select(
+            "id", count="exact"
+        ).eq('user_id', user_id)
+        
+        if platform:
+            count_response = count_response.eq('platform', platform)
+        
+        count_result = count_response.execute()
+        total = len(count_result.data) if count_result.data else 0
+        
+        print(f"✅ Returning {len(response.data)} games (total: {total})")
+        
+        return {
+            "games": response.data,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + limit < total
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"💥 Error fetching games for user {user_id}: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch games: {str(e)}")
+
+@app.get("/games/{user_id}/{game_id}")
+async def get_game_analysis(
+    user_id: str,
+    game_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get detailed analysis for a specific game
+    """
+    try:
+        # Verify user can access this data
+        if current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        response = supabase.table('game_analysis').select("*").eq(
+            'user_id', user_id
+        ).eq('id', game_id).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        game = response.data[0]
+        
+        # Parse key_moments if it exists
+        if game.get('key_moments'):
+            try:
+                if isinstance(game['key_moments'], str):
+                    game['key_moments'] = json.loads(game['key_moments'])
+            except json.JSONDecodeError:
+                print(f"Invalid JSON in key_moments for game {game_id}")
+                game['key_moments'] = []
+        
+        return game
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching game {game_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch game: {str(e)}")
+
+@app.post("/games/{user_id}/{game_id}/analyze")
+async def reanalyze_game_position(
+    user_id: str,
+    game_id: str,
+    position_data: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get fresh analysis for a specific position in a game
+    """
+    try:
+        # Verify user can access this data
+        if current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Validate position data
+        fen = position_data.get('fen')
+        move_number = position_data.get('move_number', 1)
+        
+        if not fen:
+            raise HTTPException(status_code=400, detail="FEN position required")
+        
+        # Call AI engine for analysis
+        ai_response = requests.post(
+            f"{AI_ENGINE_URL}/analyze",
+            json={
+                "fen": fen,
+                "depth": 20,
+                "user_level": "intermediate"
+            },
+            timeout=30
+        )
+        
+        if ai_response.status_code != 200:
+            raise HTTPException(status_code=500, detail="AI analysis failed")
+        
+        analysis = ai_response.json()
+        
+        # Add move context
+        analysis['move_number'] = move_number
+        analysis['fen'] = fen
+        analysis['timestamp'] = datetime.now(timezone.utc).isoformat()
+        
+        return analysis
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error analyzing position for game {game_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze position: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

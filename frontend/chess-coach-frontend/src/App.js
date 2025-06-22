@@ -10,14 +10,64 @@ import Signup from './pages/Signup';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', background: '#f8f8f8', border: '1px solid #ccc' }}>
+          <h2>Something went wrong!</h2>
+          <p>Error: {this.state.error?.message}</p>
+          <pre style={{ background: '#eee', padding: '10px', overflow: 'auto' }}>
+            {this.state.error?.stack}
+          </pre>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
-  return user ? children : <Navigate to="/login" />;
+  
+  console.log('🛡️ ProtectedRoute check:');
+  console.log('- Loading:', loading);
+  console.log('- User:', user ? `${user.email} (${user.id})` : 'null');
+  
+  if (loading) {
+    console.log('⏳ Still loading, showing loading screen');
+    return <div>Loading...</div>;
+  }
+  
+  if (!user) {
+    console.log('❌ No user found, redirecting to login');
+    return <Navigate to="/login" />;
+  }
+  
+  console.log('✅ User authenticated, showing protected content');
+  return children;
 }
 
 function NavBar() {
   const { user, logout } = useAuth();
+  
+  console.log('🧭 NavBar render:');
+  console.log('- User:', user ? `${user.email}` : 'null');
+  
   return (
     <nav className="main-nav">
       <ul>
@@ -36,11 +86,12 @@ function NavBar() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <NavBar />
-        <div className="main-content">
-          <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <NavBar />
+          <div className="main-content">
+                      <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
@@ -50,9 +101,10 @@ function App() {
             <Route path="/learn" element={<ProtectedRoute><Learn /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

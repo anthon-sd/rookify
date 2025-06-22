@@ -1,26 +1,45 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
-  const { login, signInWithProvider } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('🚀 Login form submitted');
+    console.log('Email:', email);
+    console.log('Password length:', password.length);
+    
     setError('');
-    const { error } = await login(email, password);
-    if (error) setError(error.message);
-    else navigate('/');
-  };
-
-  const handleOAuth = async (provider) => {
-    const { error } = await signInWithProvider(provider);
-    if (error) setError(error.message);
-    // Supabase will redirect on success
+    setIsLoading(true);
+    
+    try {
+      console.log('⏳ Calling AuthContext login...');
+      const result = await login(email, password);
+      console.log('✅ AuthContext login result:', result);
+      
+      if (result.error) {
+        console.error('❌ Login returned error:', result.error);
+        setError('Login failed: ' + result.error.message);
+      } else {
+        console.log('✅ Login successful, user:', result.data.user);
+        console.log('🧭 Navigating to home page...');
+        navigate('/');
+        console.log('✅ Navigation completed');
+      }
+    } catch (error) {
+      console.error('❌ Login failed in component:', error);
+      setError('Login failed: ' + error.message);
+    } finally {
+      console.log('🏁 Setting loading to false');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,13 +62,15 @@ const Login = () => {
           required
           style={{ width: '100%', marginBottom: 8 }}
         />
-        <button type="submit" style={{ width: '100%' }}>Login</button>
+        <button 
+          type="submit" 
+          disabled={isLoading}
+          style={{ width: '100%', opacity: isLoading ? 0.7 : 1 }}
+        >
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
       </form>
-      <div style={{ margin: '1rem 0' }}>
-        <button onClick={() => handleOAuth('google')} style={{ width: '100%', marginBottom: 8 }}>Login with Google</button>
-        <button onClick={() => handleOAuth('chess.com')} style={{ width: '100%' }}>Login with Chess.com</button>
-      </div>
-      {error && <div style={{ color: 'red' }}>{error}</div>}
+      {error && <div style={{ color: 'red', marginTop: 16 }}>{error}</div>}
       <div style={{ marginTop: 16 }}>
         Don't have an account? <a href="/signup">Sign up</a>
       </div>

@@ -3,13 +3,12 @@ services:
     build:
       context: ./frontend/chess-coach-frontend
       dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${REACT_APP_API_URL}
+        - REACT_APP_SUPABASE_URL=${SUPABASE_URL}
+        - REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     ports:
       - "3000:80"
-    environment:
-      # Frontend runs in browser, so API calls go to localhost from user's perspective
-      - REACT_APP_API_URL=http://localhost:8000
-      - REACT_APP_SUPABASE_URL=${SUPABASE_URL}
-      - REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     networks:
       - chess-network
     depends_on:
@@ -26,6 +25,7 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AI_ENGINE_URL=http://ai-engine:5000
     depends_on:
       - ai-engine
     networks:

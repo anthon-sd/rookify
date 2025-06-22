@@ -2,9 +2,22 @@ import React, { useState } from 'react';
 import './SyncModal.css';
 
 const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
+  // Calculate default date range (last 30 days)
+  const getDefaultDates = () => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    return {
+      fromDate: thirtyDaysAgo.toISOString().split('T')[0],
+      toDate: today.toISOString().split('T')[0]
+    };
+  };
+
   const [formData, setFormData] = useState({
     username: '',
-    months: 1,
+    fromDate: getDefaultDates().fromDate,
+    toDate: getDefaultDates().toDate,
     lichessToken: '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -15,11 +28,34 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
     setIsLoading(true);
     setError('');
 
+    // Validate date range
+    const fromDate = new Date(formData.fromDate);
+    const toDate = new Date(formData.toDate);
+    
+    if (fromDate >= toDate) {
+      setError('From date must be before to date');
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if date range is reasonable (not more than 2 years)
+    const daysDifference = (toDate - fromDate) / (1000 * 60 * 60 * 24);
+    if (daysDifference > 730) {
+      setError('Date range cannot exceed 2 years');
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      // Calculate months for backend compatibility (approximate)
+      const months = Math.ceil(daysDifference / 30);
+      
       const syncData = {
         platform,
         username: formData.username,
-        months: formData.months,
+        months: Math.max(1, months), // Ensure at least 1 month
+        fromDate: formData.fromDate,
+        toDate: formData.toDate,
         ...(platform === 'lichess' && formData.lichessToken && {
           lichessToken: formData.lichessToken,
         }),
@@ -44,7 +80,13 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
 
   const handleClose = () => {
     if (!isLoading) {
-      setFormData({ username: '', months: 1, lichessToken: '' });
+      const defaultDates = getDefaultDates();
+      setFormData({ 
+        username: '', 
+        fromDate: defaultDates.fromDate,
+        toDate: defaultDates.toDate,
+        lichessToken: '' 
+      });
       setError('');
       onClose();
     }
@@ -87,21 +129,106 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="months">Time Period</label>
-            <select
-              id="months"
-              name="months"
-              value={formData.months}
-              onChange={handleInputChange}
-              disabled={isLoading}
-            >
-              <option value={1}>Last 1 month</option>
-              <option value={3}>Last 3 months</option>
-              <option value={6}>Last 6 months</option>
-              <option value={12}>Last 12 months</option>
-            </select>
+            <label htmlFor="date-range">Date Range</label>
+            <div className="date-range-container">
+              <div className="date-input-group">
+                <label htmlFor="fromDate" className="date-label">From</label>
+                <input
+                  id="fromDate"
+                  name="fromDate"
+                  type="date"
+                  value={formData.fromDate}
+                  onChange={handleInputChange}
+                  disabled={isLoading}
+                  max={formData.toDate}
+                />
+              </div>
+              <div className="date-input-group">
+                <label htmlFor="toDate" className="date-label">To</label>
+                <input
+                  id="toDate"
+                  name="toDate"
+                  type="date"
+                  value={formData.toDate}
+                  onChange={handleInputChange}
+                  disabled={isLoading}
+                  min={formData.fromDate}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
             <div className="field-help">
-              Choose how far back to sync your games
+              Select the date range for games to sync (maximum 2 years)
+            </div>
+            <div className="date-presets">
+              <button
+                type="button"
+                className="preset-button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastWeek = new Date();
+                  lastWeek.setDate(today.getDate() - 7);
+                  setFormData(prev => ({
+                    ...prev,
+                    fromDate: lastWeek.toISOString().split('T')[0],
+                    toDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                disabled={isLoading}
+              >
+                Last Week
+              </button>
+              <button
+                type="button"
+                className="preset-button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastMonth = new Date();
+                  lastMonth.setMonth(today.getMonth() - 1);
+                  setFormData(prev => ({
+                    ...prev,
+                    fromDate: lastMonth.toISOString().split('T')[0],
+                    toDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                disabled={isLoading}
+              >
+                Last Month
+              </button>
+              <button
+                type="button"
+                className="preset-button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastThreeMonths = new Date();
+                  lastThreeMonths.setMonth(today.getMonth() - 3);
+                  setFormData(prev => ({
+                    ...prev,
+                    fromDate: lastThreeMonths.toISOString().split('T')[0],
+                    toDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                disabled={isLoading}
+              >
+                Last 3 Months
+              </button>
+              <button
+                type="button"
+                className="preset-button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastYear = new Date();
+                  lastYear.setFullYear(today.getFullYear() - 1);
+                  setFormData(prev => ({
+                    ...prev,
+                    fromDate: lastYear.toISOString().split('T')[0],
+                    toDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                disabled={isLoading}
+              >
+                Last Year
+              </button>
             </div>
           </div>
 

@@ -15,11 +15,32 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS game_analysis (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    game_id VARCHAR NOT NULL,
+    game_url VARCHAR NOT NULL,
+    platform VARCHAR NOT NULL,
+    pgn TEXT,
+    key_moments JSONB,
+    sync_job_id UUID,
+    game_id VARCHAR,
     analysis TEXT,
     strengths TEXT,
     weaknesses TEXT,
-    date TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- Create Sync Jobs table
+CREATE TABLE IF NOT EXISTS sync_jobs (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    platform VARCHAR NOT NULL,
+    username VARCHAR NOT NULL,
+    months_requested INTEGER DEFAULT 1,
+    status VARCHAR DEFAULT 'pending',
+    games_found INTEGER DEFAULT 0,
+    games_analyzed INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+    completed_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Create Recommendations table

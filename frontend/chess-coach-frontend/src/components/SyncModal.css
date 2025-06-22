@@ -126,6 +126,91 @@
   text-decoration: underline;
 }
 
+/* Date Range Picker Styles */
+.date-range-container {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.date-input-group {
+  flex: 1;
+}
+
+.date-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #718096;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.date-input-group input[type="date"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: white;
+  cursor: pointer;
+}
+
+.date-input-group input[type="date"]:focus {
+  outline: none;
+  border-color: #3182CE;
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+.date-input-group input[type="date"]:disabled {
+  background: #F7FAFC;
+  color: #718096;
+  cursor: not-allowed;
+}
+
+/* Date picker calendar icon */
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 4px;
+  margin-left: 4px;
+  filter: invert(0.5);
+}
+
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(0.3);
+}
+
+/* Date Preset Buttons */
+.date-presets {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.preset-button {
+  padding: 0.4rem 0.8rem;
+  background: #EDF2F7;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #4A5568;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.preset-button:hover:not(:disabled) {
+  background: #E2E8F0;
+  border-color: #CBD5E0;
+  color: #2D3748;
+}
+
+.preset-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .error-message {
   background: #FFF5F5;
   border: 1px solid #FEB2B2;
@@ -258,5 +343,22 @@
   
   .sync-info {
     padding: 1rem;
+  }
+  
+  /* Mobile responsive for date picker */
+  .date-range-container {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .date-presets {
+    gap: 0.5rem;
+  }
+  
+  .preset-button {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.75rem;
   }
 } 
