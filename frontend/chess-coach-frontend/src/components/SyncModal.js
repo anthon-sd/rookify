@@ -20,6 +20,23 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
     toDate: getDefaultDates().toDate,
     lichessToken: '',
   });
+  const [filters, setFilters] = useState({
+    gameTypes: {
+      bullet: false,
+      blitz: true,
+      rapid: true,
+      classical: false
+    },
+    results: {
+      win: true,
+      loss: true,
+      draw: true
+    },
+    colors: {
+      white: true,
+      black: true
+    }
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,6 +73,16 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
         months: Math.max(1, months), // Ensure at least 1 month
         fromDate: formData.fromDate,
         toDate: formData.toDate,
+        // Add filters
+        game_types: Object.entries(filters.gameTypes)
+          .filter(([_, checked]) => checked)
+          .map(([type, _]) => type),
+        results: Object.entries(filters.results)
+          .filter(([_, checked]) => checked)
+          .map(([result, _]) => result),
+        colors: Object.entries(filters.colors)
+          .filter(([_, checked]) => checked)
+          .map(([color, _]) => color),
         ...(platform === 'lichess' && formData.lichessToken && {
           lichessToken: formData.lichessToken,
         }),
@@ -86,6 +113,23 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
         fromDate: defaultDates.fromDate,
         toDate: defaultDates.toDate,
         lichessToken: '' 
+      });
+      setFilters({
+        gameTypes: {
+          bullet: false,
+          blitz: true,
+          rapid: true,
+          classical: false
+        },
+        results: {
+          win: true,
+          loss: true,
+          draw: true
+        },
+        colors: {
+          white: true,
+          black: true
+        }
       });
       setError('');
       onClose();
@@ -229,6 +273,75 @@ const SyncModal = ({ isOpen, onClose, onStartSync, platform }) => {
               >
                 Last Year
               </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Game Types</label>
+            <div className="filter-checkboxes">
+              {Object.entries(filters.gameTypes).map(([type, checked]) => (
+                <label key={type} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      gameTypes: { ...prev.gameTypes, [type]: e.target.checked }
+                    }))}
+                    disabled={isLoading}
+                  />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </label>
+              ))}
+            </div>
+            <div className="field-help">
+              Select which time controls to include (bullet &lt; 3min, blitz &lt; 10min, rapid &lt; 30min, classical ≥ 30min)
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Results</label>
+            <div className="filter-checkboxes">
+              {Object.entries(filters.results).map(([result, checked]) => (
+                <label key={result} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      results: { ...prev.results, [result]: e.target.checked }
+                    }))}
+                    disabled={isLoading}
+                  />
+                  {result.charAt(0).toUpperCase() + result.slice(1)}
+                </label>
+              ))}
+            </div>
+            <div className="field-help">
+              Include games based on your results
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Colors</label>
+            <div className="filter-checkboxes">
+              {Object.entries(filters.colors).map(([color, checked]) => (
+                <label key={color} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      colors: { ...prev.colors, [color]: e.target.checked }
+                    }))}
+                    disabled={isLoading}
+                  />
+                  {color.charAt(0).toUpperCase() + color.slice(1)}
+                </label>
+              ))}
+            </div>
+            <div className="field-help">
+              Include games where you played as white or black
             </div>
           </div>
 

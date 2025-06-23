@@ -194,13 +194,25 @@ class ChessComAPI:
         """
         try:
             import re
-            # Look for Date header in PGN: [Date "2023.12.31"]
-            date_match = re.search(r'\[Date "(\d{4}\.\d{2}\.\d{2})"\]', pgn)
-            if date_match:
-                date_str = date_match.group(1).replace('.', '-')
-                return datetime.fromisoformat(date_str).date()
+            
+            # Multiple date formats to try
+            date_patterns = [
+                r'\[Date "(\d{4}\.\d{2}\.\d{2})"\]',      # [Date "2023.12.31"]
+                r'\[Date "(\d{4}-\d{2}-\d{2})"\]',       # [Date "2023-12-31"]
+                r'\[Date "(\d{4}/\d{2}/\d{2})"\]',       # [Date "2023/12/31"]
+                r'\[UTCDate "(\d{4}\.\d{2}\.\d{2})"\]',  # [UTCDate "2023.12.31"]
+                r'\[UTCDate "(\d{4}-\d{2}-\d{2})"\]',    # [UTCDate "2023-12-31"]
+            ]
+            
+            for pattern in date_patterns:
+                date_match = re.search(pattern, pgn)
+                if date_match:
+                    date_str = date_match.group(1).replace('.', '-').replace('/', '-')
+                    return datetime.fromisoformat(date_str).date()
+            
             return None
-        except Exception:
+        except Exception as e:
+            print(f"💥 CHESS.COM: Error extracting date: {e}")
             return None
 
 def parse_pgn_game(pgn: str) -> List[Dict]:
@@ -244,4 +256,30 @@ def parse_pgn_game(pgn: str) -> List[Dict]:
         key_moments.append(position)
         node = next_node
     
-    return key_moments 
+    return key_moments
+
+# Test function for debugging
+def test_date_extraction():
+    """Test function to debug date extraction"""
+    sample_pgn = '''[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2024.01.15"]
+[Round "-"]
+[White "testuser"]
+[Black "opponent"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1485"]
+[TimeControl "600"]
+[Termination "testuser won by checkmate"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Bb7 10. d4 Re8 11. Nbd2 Bf8 12. a4 h6 13. Bc2 exd4 14. cxd4 Nb4 15. Bb1 c5 16. d5 Nd7 17. Ra3 f5 18. Rae3 Nc2 19. Bxc2 fxe4 20. Rxe4 Rxe4 21. Nxe4 c4 22. Ng3 Nc5 23. Be3 Qd7 24. Qc2 Re8 25. Bd4 Nd3 26. Re2 Be7 27. Rxe7 Rxe7 28. Qxd3 Qe8 29. Qf5 Rf7 30. Qe6 1-0'''
+    
+    api = ChessComAPI("testuser")
+    date = api._extract_game_date(sample_pgn)
+    print(f"Test date extraction result: {date}")
+    return date
+
+if __name__ == "__main__":
+    # Run test when script is executed directly
+    test_date_extraction() 

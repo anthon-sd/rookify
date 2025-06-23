@@ -20,9 +20,11 @@ from lichess_api import LichessAPI
 from game_analyzer import GameAnalyzer
 from pinecone_upload import upload_to_pinecone
 from utils.rate_limiter import check_sync_rate_limit, get_rate_limiter_for_platform
-from typing import Optional
+from typing import Optional, List, Dict
 import json
 import requests
+import chess.pgn
+import io
 
 # Configuration
 AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://ai-engine:5000")
@@ -94,6 +96,10 @@ class SyncRequest(BaseModel):
     fromDate: Optional[str] = None  # Start date for sync (YYYY-MM-DD format)
     toDate: Optional[str] = None  # End date for sync (YYYY-MM-DD format)
     lichess_token: Optional[str] = None  # For Lichess private games
+    # New filter parameters
+    game_types: Optional[List[str]] = None  # ["bullet", "blitz", "rapid", "classical"]
+    results: Optional[List[str]] = None  # ["win", "loss", "draw"]
+    colors: Optional[List[str]] = None  # ["white", "black"]
 
 # Helper functions
 def extract_game_date_from_game(game: dict) -> Optional[datetime]:
@@ -117,6 +123,81 @@ def extract_game_date_from_game(game: dict) -> Optional[datetime]:
         return None
     except Exception:
         return None
+
+def classify_time_control(time_control: str) -> str:
+    """Classify time control into game type categories."""
+    if not time_control:
+        return "unknown"
+    
+    import re
+    
+    # Parse time control (e.g., "600+0", "180+2")
+    match = re.match(r'(\d+)\+(\d+)', time_control)
+    if match:
+        base_time = int(match.group(1))
+        increment = int(match.group(2))
+        total_time = base_time + 40 * increment  # Estimate with 40 moves
+    else:
+        # Try to parse single number (seconds)
+        try:
+            total_time = int(time_control)
+        except:
+            return "unknown"
+    
+    # Classify based on total time in seconds
+    if total_time < 180:  # Less than 3 minutes
+        return "bullet"
+    elif total_time < 600:  # Less than 10 minutes
+        return "blitz"
+    elif total_time < 1800:  # Less than 30 minutes
+        return "rapid"
+    else:
+        return "classical"
+
+def should_include_game(game_dict: Dict, pgn: str, request: SyncRequest) -> bool:
+    """Check if game matches filter criteria."""
+    import chess.pgn
+    import io
+    
+    # Parse PGN headers
+    game = chess.pgn.read_game(io.StringIO(pgn))
+    if not game:
+        return False
+    
+    headers = game.headers
+    
+    # Check game type filter
+    if request.game_types:
+        time_control = headers.get("TimeControl", "")
+        game_type = classify_time_control(time_control)
+        if game_type not in request.game_types:
+            return False
+    
+    # Check result filter
+    if request.results:
+        result = headers.get("Result", "")
+        user_color = "white" if headers.get("White", "").lower() == request.username.lower() else "black"
+        
+        # Convert result to user perspective
+        if result == "1-0":
+            user_result = "win" if user_color == "white" else "loss"
+        elif result == "0-1":
+            user_result = "loss" if user_color == "white" else "win"
+        elif result == "1/2-1/2":
+            user_result = "draw"
+        else:
+            return False  # Unknown result
+        
+        if user_result not in request.results:
+            return False
+    
+    # Check color filter
+    if request.colors:
+        user_color = "white" if headers.get("White", "").lower() == request.username.lower() else "black"
+        if user_color not in request.colors:
+            return False
+    
+    return True
 
 # Authentication endpoints
 @app.post("/register", response_model=User)
@@ -585,14 +666,29 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
         elif request.platform == "lichess":
             api = LichessAPI(token=request.lichess_token)
             print(f"🏆 Fetching Lichess games from {since} to {until}")
+            
+            # Use game_types filter for Lichess API if provided
+            lichess_game_types = request.game_types if request.game_types else ["bullet", "blitz", "rapid", "classical"]
+            
             games = api.get_user_games(
                 request.username,
                 since=since,
                 until=until,
-                max_games=100
+                max_games=100,
+                game_types=lichess_game_types
             )
         else:
             raise ValueError(f"Unsupported platform: {request.platform}")
+        
+        # Filter games based on user preferences
+        if request.game_types or request.results or request.colors:
+            print(f"🎯 Applying filters: game_types={request.game_types}, results={request.results}, colors={request.colors}")
+            filtered_games = []
+            for game in games:
+                if should_include_game(game, game['pgn'], request):
+                    filtered_games.append(game)
+            games = filtered_games
+            print(f"🎯 Filtered to {len(games)} games matching criteria")
         
         # Update games found
         supabase.table('sync_jobs').update({
@@ -625,7 +721,7 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                 for moment in moments:
                     moment['user_id'] = user_id
                 
-                analyzed_moments = analyzer.analyze_game_moments(moments)
+                analyzed_moments = analyzer.analyze_game_moments(moments, depth=12)
                 
                 # Store analysis
                 game_analysis = {
@@ -875,4 +971,71 @@ async def reanalyze_game_position(
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Test filtering functionality
+    def test_filtering():
+        """Test game filtering functionality"""
+        print("Testing game filtering functionality...")
+        
+        # Test time control classification
+        test_cases = [
+            ("60+0", "bullet"),
+            ("180+0", "blitz"),
+            ("300+3", "blitz"),
+            ("600+0", "rapid"),
+            ("900+10", "rapid"),
+            ("1800+0", "classical"),
+            ("3600+0", "classical"),
+            ("invalid", "unknown"),
+            ("", "unknown"),
+        ]
+        
+        for time_control, expected in test_cases:
+            result = classify_time_control(time_control)
+            status = "✅" if result == expected else "❌"
+            print(f"{status} {time_control} -> {result} (expected: {expected})")
+        
+        # Test PGN parsing for filtering
+        sample_pgn = '''[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2024.01.15"]
+[Round "-"]
+[White "testuser"]
+[Black "opponent"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1485"]
+[TimeControl "600+0"]
+[Termination "testuser won by checkmate"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Bb7 10. d4 Re8 11. Nbd2 Bf8 12. a4 h6 13. Bc2 exd4 14. cxd4 Nb4 15. Bb1 c5 16. d5 Nd7 17. Ra3 f5 18. Rae3 Nc2 19. Bxc2 fxe4 20. Rxe4 Rxe4 21. Nxe4 c4 22. Ng3 Nc5 23. Be3 Qd7 24. Qc2 Re8 25. Bd4 Nd3 26. Re2 Be7 27. Rxe7 Rxe7 28. Qxd3 Qe8 29. Qf5 Rf7 30. Qe6 1-0'''
+        
+        # Create a test sync request
+        class TestSyncRequest:
+            def __init__(self, game_types=None, results=None, colors=None):
+                self.username = "testuser"
+                self.game_types = game_types
+                self.results = results
+                self.colors = colors
+        
+        # Test filtering scenarios
+        test_scenarios = [
+            (TestSyncRequest(game_types=["rapid"]), True, "rapid game should be included"),
+            (TestSyncRequest(game_types=["bullet"]), False, "bullet filter should exclude rapid game"),
+            (TestSyncRequest(results=["win"]), True, "win filter should include winning game"),
+            (TestSyncRequest(results=["loss"]), False, "loss filter should exclude winning game"),
+            (TestSyncRequest(colors=["white"]), True, "white filter should include white game"),
+            (TestSyncRequest(colors=["black"]), False, "black filter should exclude white game"),
+        ]
+        
+        for request, expected, description in test_scenarios:
+            result = should_include_game({}, sample_pgn, request)
+            status = "✅" if result == expected else "❌"
+            print(f"{status} {description}: {result}")
+        
+        print("Filtering tests completed!")
+    
+    # Run tests if this file is executed directly
+    # test_filtering()
+    
     uvicorn.run(app, host="0.0.0.0", port=8000) 

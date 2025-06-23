@@ -25,7 +25,8 @@ class ChessAnalyzer:
         """
         response = requests.post(
             f"{self.ai_engine_url}/analyze",
-            json={"fen": fen, "depth": depth}
+            json={"fen": fen, "depth": depth},
+            timeout=120  # Increased timeout for AI engine with OpenAI calls
         )
         response.raise_for_status()
         return response.json()
@@ -43,7 +44,8 @@ class ChessAnalyzer:
         """
         response = requests.post(
             f"{self.ai_engine_url}/analyze",
-            json={"pgn": pgn, "depth": depth}
+            json={"pgn": pgn, "depth": depth},
+            timeout=120  # Increased timeout for AI engine with OpenAI calls
         )
         response.raise_for_status()
         return response.json() 

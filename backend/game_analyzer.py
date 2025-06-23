@@ -80,10 +80,8 @@ class GameAnalyzer:
         """
         response = requests.post(
             f"{self.ai_engine_url}/analyze",
-            json={
-                "fen": fen,
-                "depth": depth
-            }
+            json={"fen": fen, "depth": depth},
+            timeout=120  # Increased timeout for AI engine with OpenAI calls
         )
         response.raise_for_status()
         return response.json()

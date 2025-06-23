@@ -6,9 +6,10 @@ python-dotenv==1.0.0
 pydantic==2.6.1
 requests==2.31.0
 python-jose==3.3.0
-passlib==1.7.4
+passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
-bcrypt==4.1.2
+# Pin bcrypt to a compatible version to avoid __about__ error
+bcrypt==4.0.1
 stockfish==3.28.0
 supabase==1.2.0
 email-validator==2.1.0.post1
