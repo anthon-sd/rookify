@@ -397,8 +397,20 @@ async def analyze_chess_com_games(request: ChessComRequest):
             for moment in moments:
                 moment['user_id'] = request.username
             
-            # Analyze moments
-            analyzed_moments = game_analyzer.analyze_game_moments(moments)
+            # Get user rating for selective analysis (using username as fallback)
+            try:
+                user_result = supabase.table('users').select('rating').eq('username', request.username).execute()
+                user_rating = user_result.data[0]['rating'] if user_result.data else 1500
+            except:
+                user_rating = 1500  # Default rating
+            
+            # Analyze moments with batch processing
+            analyzed_moments = game_analyzer.analyze_game_moments(
+                moments, 
+                depth=20, 
+                user_rating=user_rating,
+                user_level="intermediate"
+            )
             
             # Extract recommendations
             if analyzed_moments and 'recommendations' in analyzed_moments[0]:
@@ -436,8 +448,20 @@ async def analyze_game(request: GameAnalysisRequest):
         for moment in moments:
             moment['user_id'] = request.user_id
         
-        # Analyze moments
-        analyzed_moments = game_analyzer.analyze_game_moments(moments, request.depth)
+        # Get user rating for selective analysis
+        try:
+            user_result = supabase.table('users').select('rating').eq('id', request.user_id).execute()
+            user_rating = user_result.data[0]['rating'] if user_result.data else 1500
+        except:
+            user_rating = 1500  # Default rating
+        
+        # Analyze moments with batch processing
+        analyzed_moments = game_analyzer.analyze_game_moments(
+            moments, 
+            request.depth, 
+            user_rating=user_rating,
+            user_level="intermediate"
+        )
         
         # Upload to vector database
         upload_to_pinecone(analyzed_moments)
@@ -721,7 +745,20 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                 for moment in moments:
                     moment['user_id'] = user_id
                 
-                analyzed_moments = analyzer.analyze_game_moments(moments, depth=12)
+                # Get user rating for selective analysis
+                try:
+                    user_result = supabase.table('users').select('rating').eq('id', user_id).execute()
+                    user_rating = user_result.data[0]['rating'] if user_result.data else 1500
+                except:
+                    user_rating = 1500  # Default rating
+                
+                # Use batch processing with selective criteria
+                analyzed_moments = analyzer.analyze_game_moments(
+                    moments, 
+                    depth=12, 
+                    user_rating=user_rating,
+                    user_level="intermediate"  # Could be derived from rating
+                )
                 
                 # Store analysis
                 game_analysis = {

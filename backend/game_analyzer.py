@@ -67,6 +67,27 @@ class GameAnalyzer:
         if mat_loss >= 1 and player_eval > 100: return False, True
         return False, False
 
+    def detect_tactical_features(self, board: chess.Board, move: chess.Move = None) -> Dict:
+        """Detect tactical features in a position"""
+        features = {
+            'is_check': board.is_check(),
+            'is_capture': move.to_square in [square for square in board.occupied] if move else False,
+            'is_castle': move and board.is_castling(move) if move else False,
+            'piece_count': board.occupied.bit_count(),
+            'is_tactical': False
+        }
+        
+        # Consider tactical if check, capture, or castle
+        features['is_tactical'] = features['is_check'] or features['is_capture'] or features['is_castle']
+        
+        return features
+
+    def detect_phase_transition(self, current_phase: str, previous_phase: str) -> bool:
+        """Detect if there's a phase transition"""
+        if not previous_phase:
+            return False
+        return current_phase != previous_phase
+
     def analyze_position(self, fen: str, depth: int = 20) -> Dict:
         """
         Analyze a position using the AI engine service.
@@ -86,47 +107,209 @@ class GameAnalyzer:
         response.raise_for_status()
         return response.json()
 
-    def analyze_game_moments(self, moments: List[Dict], depth: int = 20) -> List[Dict]:
+    def analyze_positions_batch(self, positions: List[Dict], depth: int = 20, 
+                               user_rating: int = 1500, user_level: str = "intermediate") -> Dict[str, Dict]:
         """
-        Analyze a list of game moments with enhanced move classification using the AI engine service.
+        Analyze multiple positions using batch processing
+        
+        Args:
+            positions: List of position dictionaries with 'fen' and 'position_id'
+            depth: Analysis depth
+            user_rating: User's rating for selective analysis
+            user_level: User's skill level
+            
+        Returns:
+            Dict mapping position_id to analysis results
+        """
+        batch_size = 50  # Process in chunks to avoid timeout
+        all_results = {}
+        
+        for i in range(0, len(positions), batch_size):
+            batch = positions[i:i + batch_size]
+            
+            try:
+                response = requests.post(
+                    f"{self.ai_engine_url}/analyze-batch",
+                    json={
+                        'positions': batch,
+                        'default_depth': depth,
+                        'user_rating': user_rating,
+                        'user_level': user_level,
+                        'selective_llm': True
+                    },
+                    timeout=300  # 5 minutes for batch
+                )
+                
+                if response.status_code == 200:
+                    batch_results = response.json()['results']
+                    for result in batch_results:
+                        if 'error' not in result and result.get('position_id'):
+                            all_results[result['position_id']] = result
+                else:
+                    print(f"Batch analysis failed with status {response.status_code}: {response.text}")
+                    
+            except Exception as e:
+                print(f"Error in batch analysis: {e}")
+                # Fallback to individual analysis for this batch
+                for pos in batch:
+                    try:
+                        result = self.analyze_position(pos['fen'], depth)
+                        all_results[pos['position_id']] = result
+                    except Exception as pos_error:
+                        print(f"Failed to analyze position {pos['position_id']}: {pos_error}")
+        
+        return all_results
+
+    def analyze_game_moments(self, moments: List[Dict], depth: int = 20, 
+                           user_rating: int = 1500, user_level: str = "intermediate") -> List[Dict]:
+        """
+        Analyze a list of game moments with enhanced move classification using batch processing.
         
         Args:
             moments (List[Dict]): List of game moments to analyze
             depth (int): Analysis depth
+            user_rating (int): User's rating for selective analysis
+            user_level (str): User's skill level
             
         Returns:
             List[Dict]: Analyzed moments with identified key positions
         """
+        if not moments:
+            return []
+
         analyzed_moments = []
         all_recommendations = []
+        
+        # Prepare positions for batch analysis
+        batch_positions = []
+        position_map = {}  # Map position_id to moment index and type
+        
+        # Track game context for selective analysis
+        game_context = {
+            'mistakes_analyzed': 0,
+            'previous_phase': None,
+            'total_moments': len(moments)
+        }
+        
+        for i, moment in enumerate(moments):
+            board = chess.Board(moment['position_fen'])
+            move_number = i + 1
+            current_phase = self.determine_phase(move_number, board)
+            
+            # Detect phase transition
+            phase_transition = self.detect_phase_transition(current_phase, game_context['previous_phase'])
+            game_context['previous_phase'] = current_phase
+            
+            # Get tactical features for the position
+            move_obj = None
+            if moment.get('move'):
+                try:
+                    move_obj = chess.Move.from_uci(moment['move'])
+                except:
+                    move_obj = None
+            
+            tactical_features = self.detect_tactical_features(board, move_obj)
+            
+            # Position before move
+            position_id_before = f"pos_{i}_before"
+            position_map[position_id_before] = {'moment_idx': i, 'type': 'before'}
+            
+            move_context = {
+                'move_number': move_number,
+                'phase': current_phase,
+                'phase_transition': phase_transition,
+                'piece_count': tactical_features['piece_count'],
+                'is_tactical': tactical_features['is_tactical'],
+                'is_check': tactical_features['is_check'],
+                'is_capture': tactical_features['is_capture'],
+                'mistakes_analyzed_in_game': game_context['mistakes_analyzed']
+            }
+            
+            batch_positions.append({
+                'fen': moment['position_fen'],
+                'position_id': position_id_before,
+                'depth': depth,
+                'move_context': move_context,
+                'user_level': user_level,
+                'user_rating': user_rating
+            })
+            
+            # Position after move (if move exists)
+            if moment.get('move') and move_obj:
+                board_after = chess.Board(moment['position_fen'])
+                try:
+                    board_after.push(move_obj)
+                    position_id_after = f"pos_{i}_after"
+                    position_map[position_id_after] = {'moment_idx': i, 'type': 'after'}
+                    
+                    tactical_features_after = self.detect_tactical_features(board_after)
+                    
+                    move_context_after = {
+                        'move_number': move_number,
+                        'phase': current_phase,
+                        'piece_count': tactical_features_after['piece_count'],
+                        'is_tactical': tactical_features_after['is_tactical'],
+                        'move_played': moment['move']
+                    }
+                    
+                    batch_positions.append({
+                        'fen': board_after.fen(),
+                        'position_id': position_id_after,
+                        'depth': depth,
+                        'move_context': move_context_after,
+                        'user_level': user_level,
+                        'user_rating': user_rating
+                    })
+                except Exception as e:
+                    print(f"Error processing move {moment['move']}: {e}")
+        
+        # Analyze all positions in batch
+        print(f"Analyzing {len(batch_positions)} positions in batch...")
+        batch_results = self.analyze_positions_batch(batch_positions, depth, user_rating, user_level)
+        
+        # Process results and create analyzed moments
         prev_eval = None
         prev_mat = None
+        
         for i, moment in enumerate(moments):
             board = chess.Board(moment['position_fen'])
             move_number = i + 1
             mat_before = self.material_count(board)
-
-            # Analyze position with AI engine (get best move and eval)
-            best_info = self.analyze_position(moment['position_fen'], depth)
+            
+            # Get analysis results
+            position_id_before = f"pos_{i}_before"
+            position_id_after = f"pos_{i}_after"
+            
+            best_info = batch_results.get(position_id_before, {})
             best_move = best_info.get("best_move")
             best_eval = best_info.get("evaluation", {}).get("value")
+            
             if best_info.get("evaluation", {}).get("type") == "mate":
-                # Assign a large value for mate
                 best_eval = 10000 if best_eval > 0 else -10000
 
-            # Make the move
+            # Get evaluation after move
+            player_eval = None
+            llm_analysis = None
+            
             if moment.get('move'):
-                move = chess.Move.from_uci(moment['move'])
-                board.push(move)
-
-            # Analyze resulting position
-            deep_info = self.analyze_position(board.fen(), depth)
-            player_eval = deep_info.get("evaluation", {}).get("value")
-            if deep_info.get("evaluation", {}).get("type") == "mate":
-                player_eval = 10000 if player_eval > 0 else -10000
+                try:
+                    move = chess.Move.from_uci(moment['move'])
+                    board.push(move)
+                    
+                    deep_info = batch_results.get(position_id_after, {})
+                    player_eval = deep_info.get("evaluation", {}).get("value")
+                    
+                    if deep_info.get("evaluation", {}).get("type") == "mate":
+                        player_eval = 10000 if player_eval > 0 else -10000
+                    
+                    # Get LLM analysis if it was generated
+                    llm_analysis = deep_info.get("analysis")
+                    
+                except Exception as e:
+                    print(f"Error processing move for moment {i}: {e}")
 
             # Calculate evaluation difference
-            delta_cp = abs((player_eval or 0) - (best_eval or 0))
+            delta_cp = abs((player_eval or 0) - (best_eval or 0)) if best_eval is not None else 0
 
             # Get material count after move
             mat_after = self.material_count(board)
@@ -147,6 +330,10 @@ class GameAnalyzer:
                 is_great=is_great
             )
 
+            # Update mistake counter for selective analysis
+            if accuracy_class in ['Mistake', 'Miss', 'Blunder']:
+                game_context['mistakes_analyzed'] += 1
+
             # Determine game phase
             phase = self.determine_phase(move_number, board)
 
@@ -162,7 +349,9 @@ class GameAnalyzer:
                 'is_brilliant': is_brilliant,
                 'is_great': is_great,
                 'phase': phase,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat(),
+                'llm_analysis': llm_analysis,
+                'llm_used': best_info.get('llm_used', False) or batch_results.get(position_id_after, {}).get('llm_used', False)
             }
 
             # Generate recommendations for significant mistakes
@@ -178,6 +367,12 @@ class GameAnalyzer:
         # Add recommendations to the first analyzed moment
         if analyzed_moments and all_recommendations:
             analyzed_moments[0]['recommendations'] = all_recommendations
+
+        print(f"Batch analysis complete. Processed {len(analyzed_moments)} moments.")
+        
+        # Log efficiency stats
+        total_llm_calls = sum(1 for m in analyzed_moments if m.get('llm_used', False))
+        print(f"LLM efficiency: {total_llm_calls}/{len(analyzed_moments)*2} positions analyzed with OpenAI ({total_llm_calls/(len(analyzed_moments)*2)*100:.1f}%)")
 
         return analyzed_moments
 
