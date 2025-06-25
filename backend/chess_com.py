@@ -225,8 +225,21 @@ def parse_pgn_game(pgn: str) -> List[Dict]:
     Returns:
         List[Dict]: List of key moments with metadata
     """
-    game = chess.pgn.read_game(io.StringIO(pgn))
-    if not game:
+    print(f"🔍 PGN_PARSER DEBUG: parse_pgn_game called with:")
+    print(f"   - pgn type: {type(pgn)}")
+    print(f"   - pgn length: {len(pgn) if isinstance(pgn, str) else 'N/A'}")
+    print(f"   - pgn preview: {pgn[:200] if isinstance(pgn, str) else pgn}...")
+    
+    try:
+        game = chess.pgn.read_game(io.StringIO(pgn))
+        print(f"🔍 PGN_PARSER DEBUG: chess.pgn.read_game returned: {type(game)}")
+        
+        if not game:
+            print("🔍 PGN_PARSER DEBUG: game is None/False, returning []")
+            return []
+    except Exception as e:
+        print(f"❌ PGN_PARSER ERROR: Failed to parse PGN: {e}")
+        print(f"   - PGN content: {pgn}")
         return []
     
     key_moments = []
@@ -256,6 +269,8 @@ def parse_pgn_game(pgn: str) -> List[Dict]:
         key_moments.append(position)
         node = next_node
     
+    print(f"🔍 PGN_PARSER DEBUG: Completed parsing, returning {len(key_moments)} moments")
+    print(f"🔍 PGN_PARSER DEBUG: key_moments type: {type(key_moments)}")
     return key_moments
 
 # Test function for debugging

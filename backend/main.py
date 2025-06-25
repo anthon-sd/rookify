@@ -25,6 +25,7 @@ import json
 import requests
 import chess.pgn
 import io
+from utils.sync_job_compliance import sync_job_manager
 
 # Configuration
 AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://ai-engine:5000")
@@ -346,6 +347,35 @@ async def debug_auth_endpoint(current_user: User = Depends(get_current_user)):
     print("DEBUG: Auth endpoint reached - user authenticated!")
     return {"debug": "auth working", "user_id": current_user.id}
 
+@app.get("/debug/game/{game_id}")
+async def debug_game_data(game_id: str):
+    """
+    Debug endpoint to check what data exists for a specific game
+    """
+    try:
+        response = supabase.table('game_analysis').select("*").eq('id', game_id).execute()
+        
+        if not response.data:
+            return {"error": "Game not found", "game_id": game_id}
+        
+        game = response.data[0]
+        
+        return {
+            "game_id": game_id,
+            "has_pgn": bool(game.get('pgn')),
+            "pgn_length": len(game.get('pgn', '')) if game.get('pgn') else 0,
+            "pgn_preview": game.get('pgn', '')[:200] if game.get('pgn') else None,
+            "key_moments_type": type(game.get('key_moments')).__name__,
+            "key_moments_count": len(game.get('key_moments', [])) if game.get('key_moments') else 0,
+            "all_fields": list(game.keys()),
+            "platform": game.get('platform'),
+            "game_url": game.get('game_url'),
+            "user_id": game.get('user_id')
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "game_id": game_id}
+
 @app.post("/analyze")
 async def analyze_position(request: AnalysisRequest):
     if chess_analyzer is None:
@@ -361,221 +391,29 @@ async def analyze_position(request: AnalysisRequest):
 @app.post("/chess-com/connect")
 async def connect_chess_com(request: ChessComRequest):
     """
-    Connect to Chess.com and fetch user's recent games.
+    Test connection to Chess.com for a user.
     """
     try:
         api = ChessComAPI(request.username)
         profile = api.get_user_profile()
-        games = api.get_recent_games(request.days)
+        stats = api.get_user_stats()
         
         return {
             "status": "success",
             "profile": profile,
-            "games_count": len(games)
+            "stats": stats
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/chess-com/analyze-games")
-async def analyze_chess_com_games(request: ChessComRequest):
-    """
-    Analyze user's recent games from Chess.com.
-    """
-    try:
-        # Get games from Chess.com
-        api = ChessComAPI(request.username)
-        games = api.get_recent_games(request.days)
-        
-        all_moments = []
-        all_recommendations = []
-        
-        for pgn in games:
-            # Parse game into moments
-            moments = parse_pgn_game(pgn)
-            
-            # Update user_id for all moments
-            for moment in moments:
-                moment['user_id'] = request.username
-            
-            # Get user rating for selective analysis (using username as fallback)
-            try:
-                user_result = supabase.table('users').select('rating').eq('username', request.username).execute()
-                user_rating = user_result.data[0]['rating'] if user_result.data else 1500
-            except:
-                user_rating = 1500  # Default rating
-            
-            # Analyze moments with batch processing
-            analyzed_moments = game_analyzer.analyze_game_moments(
-                moments, 
-                depth=20, 
-                user_rating=user_rating,
-                user_level="intermediate"
-            )
-            
-            # Extract recommendations
-            if analyzed_moments and 'recommendations' in analyzed_moments[0]:
-                all_recommendations.extend(analyzed_moments[0]['recommendations'])
-            
-            all_moments.extend(analyzed_moments)
-        
-        # Upload to vector database
-        upload_to_pinecone(all_moments)
-        
-        # Store recommendations in database
-        if all_recommendations:
-            from config.database import supabase
-            result = supabase.table('recommendations').insert(all_recommendations).execute()
-        
-        return {
-            "status": "success",
-            "analyzed_moments": len(all_moments),
-            "games_analyzed": len(games),
-            "recommendations_generated": len(all_recommendations)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/analyze-game")
-async def analyze_game(request: GameAnalysisRequest):
-    """
-    Analyze a single game and store key moments in the vector database.
-    """
-    try:
-        # Parse game into moments
-        moments = parse_pgn_game(request.pgn)
-        
-        # Update user_id for all moments
-        for moment in moments:
-            moment['user_id'] = request.user_id
-        
-        # Get user rating for selective analysis
-        try:
-            user_result = supabase.table('users').select('rating').eq('id', request.user_id).execute()
-            user_rating = user_result.data[0]['rating'] if user_result.data else 1500
-        except:
-            user_rating = 1500  # Default rating
-        
-        # Analyze moments with batch processing
-        analyzed_moments = game_analyzer.analyze_game_moments(
-            moments, 
-            request.depth, 
-            user_rating=user_rating,
-            user_level="intermediate"
-        )
-        
-        # Upload to vector database
-        upload_to_pinecone(analyzed_moments)
-        
-        return {
-            "status": "success",
-            "analyzed_moments": len(analyzed_moments)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/similar-positions")
-async def get_similar_positions(request: SimilarPositionsRequest):
-    """
-    Get similar positions from the vector database.
-    """
-    try:
-        from pinecone_upload import query_vector_db
-        
-        # Create a text representation of the position for querying
-        query_text = f"Position: {request.fen}"
-        
-        # Query the vector database
-        similar_positions = query_vector_db(
-            query_text=query_text,
-            user_id=request.user_id,
-            skill_category=request.skill_category,
-            phase=request.phase,
-            top_k=request.top_k
-        )
-        
-        return {
-            "status": "success",
-            "similar_positions": similar_positions
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/recommendations")
-async def create_recommendation(request: RecommendationRequest):
-    """
-    Create a new recommendation for a user.
-    """
-    try:
-        from pinecone_upload import query_vector_db
-        
-        # Get similar positions for this game
-        similar_positions = query_vector_db(
-            query_text=f"Position: {request.fen}",
-            user_id=request.user_id,
-            top_k=5
-        )
-        
-        # Create recommendation based on similar positions
-        recommendation = {
-            "user_id": request.user_id,
-            "game_analysis_id": request.game_analysis_id,
-            "recommendation": "Practice this position to improve your understanding of similar positions.",
-            "priority": request.priority,
-            "status": "pending",
-            "similar_positions": similar_positions
-        }
-        
-        # Store in database
-        from config.database import supabase
-        result = supabase.table('recommendations').insert(recommendation).execute()
-        
-        return {
-            "status": "success",
-            "recommendation": result.data[0]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/recommendations/{user_id}")
-async def get_user_recommendations(user_id: str):
-    """
-    Get all recommendations for a user.
-    """
-    try:
-        from config.database import supabase
-        
-        result = supabase.table('recommendations')\
-            .select('*')\
-            .eq('user_id', user_id)\
-            .order('priority', desc=True)\
-            .execute()
-        
-        return {
-            "status": "success",
-            "recommendations": result.data
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.patch("/recommendations/{recommendation_id}")
-async def update_recommendation_status(recommendation_id: str, status: str):
-    """
-    Update the status of a recommendation.
-    """
-    try:
-        from config.database import supabase
-        
-        result = supabase.table('recommendations')\
-            .update({'status': status})\
-            .eq('id', recommendation_id)\
-            .execute()
-        
-        return {
-            "status": "success",
-            "recommendation": result.data[0]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ================================================================================
+# IMPORTANT: ALL GAME SYNC AND ANALYSIS OPERATIONS MUST USE THE SYNC JOBS TABLE
+# 
+# Use the /sync-games/{user_id} endpoint for all chess platform synchronization.
+# This ensures proper tracking, progress monitoring, rate limiting, and user auth.
+# 
+# Legacy endpoints that bypass sync jobs have been removed for consistency.
+# ================================================================================
 
 # Game Sync Endpoints
 @app.post("/sync-games/{user_id}")
@@ -608,24 +446,14 @@ async def sync_platform_games(
     if request.platform not in ["chess.com", "lichess"]:
         raise HTTPException(status_code=400, detail="Platform must be 'chess.com' or 'lichess'")
     
-    # Create sync job record
-    sync_job = {
-        'id': str(uuid.uuid4()),
-        'user_id': user_id,
-        'platform': request.platform,
-        'username': request.username,
-        'months_requested': request.months,
-        'status': 'pending',
-        'games_found': 0,
-        'games_analyzed': 0,
-        'created_at': datetime.now(timezone.utc).isoformat()
-    }
-    
+    # Create sync job record using SyncJobManager for compliance
     try:
-        # Store sync job in database
-        result = supabase.table('sync_jobs').insert(sync_job).execute()
-        if not result.data:
-            raise HTTPException(status_code=500, detail="Failed to create sync job")
+        sync_job = sync_job_manager.create_sync_job(
+            user_id=user_id,
+            platform=request.platform,
+            username=request.username,
+            months_requested=request.months
+        )
         
         # Queue background task
         background_tasks.add_task(
@@ -646,11 +474,8 @@ async def sync_platform_games(
 async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest):
     """Background task to sync and analyze games."""
     try:
-        # Update status to fetching
-        supabase.table('sync_jobs').update({
-            'status': 'fetching',
-            'updated_at': datetime.now(timezone.utc).isoformat()
-        }).eq('id', sync_job_id).execute()
+        # Update status to fetching using SyncJobManager
+        sync_job_manager.update_sync_job_status(sync_job_id, 'fetching')
         
         # Debug: Log what date parameters we received
         print(f"🔍 DEBUG: fromDate = '{request.fromDate}', toDate = '{request.toDate}', months = {request.months}")
@@ -714,11 +539,9 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
             games = filtered_games
             print(f"🎯 Filtered to {len(games)} games matching criteria")
         
-        # Update games found
-        supabase.table('sync_jobs').update({
-            'games_found': len(games),
-            'status': 'analyzing'
-        }).eq('id', sync_job_id).execute()
+        # Update games found using SyncJobManager
+        sync_job_manager.update_sync_job_status(sync_job_id, 'analyzing')
+        sync_job_manager.update_sync_job_progress(sync_job_id, games_found=len(games))
         
         # Analyze games in batches
         analyzer = GameAnalyzer()
@@ -741,6 +564,23 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                     # For Lichess, we need to parse the PGN differently
                     moments = parse_pgn_game(game['pgn'])
                 
+                # DEBUG: Log what we got from parse_pgn_game
+                print(f"🔍 DEBUG Game {i+1}: parse_pgn_game returned type: {type(moments)}")
+                print(f"🔍 DEBUG Game {i+1}: moments value: {moments}")
+                if isinstance(moments, list):
+                    print(f"🔍 DEBUG Game {i+1}: moments length: {len(moments)}")
+                    if len(moments) > 0:
+                        print(f"🔍 DEBUG Game {i+1}: first moment type: {type(moments[0])}")
+                
+                # Safety check: ensure moments is a list
+                if not isinstance(moments, list):
+                    print(f"❌ ERROR Game {i+1}: Expected list, got {type(moments)}. Skipping this game.")
+                    continue
+                
+                if len(moments) == 0:
+                    print(f"⚠️ WARNING Game {i+1}: No moments found in game. Skipping.")
+                    continue
+                
                 # Update user_id for all moments
                 for moment in moments:
                     moment['user_id'] = user_id
@@ -752,53 +592,103 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                 except:
                     user_rating = 1500  # Default rating
                 
-                # Use batch processing with selective criteria
-                analyzed_moments = analyzer.analyze_game_moments(
+                print(f"🔍 DEBUG Game {i+1}: About to call analyze_game_moments with:")
+                print(f"   - moments: {type(moments)} with {len(moments)} items")
+                print(f"   - depth: 12")
+                print(f"   - user_rating: {user_rating}")
+                print(f"   - user_level: intermediate")
+                
+                # Use batch processing with selective criteria - HOTFIX APPLIED
+                from hotfix_batch_processing import safe_analyze_game_moments
+                analyzed_moments = safe_analyze_game_moments(
+                    analyzer,
                     moments, 
                     depth=12, 
                     user_rating=user_rating,
-                    user_level="intermediate"  # Could be derived from rating
+                    user_level="intermediate"
                 )
                 
-                # Store analysis
+                # Extract enhanced metadata from PGN
+                from utils.db_batch import extract_pgn_headers, calculate_game_statistics
+                pgn_headers = extract_pgn_headers(game['pgn'])
+                game_stats = calculate_game_statistics(analyzed_moments)
+                
+                # Store analysis with enhanced schema
                 game_analysis = {
                     'user_id': user_id,
                     'game_url': game['url'],
                     'platform': request.platform,
+                    'game_id': game.get('id', game['url'].split('/')[-1]),
                     'pgn': game['pgn'],
                     'key_moments': analyzed_moments,
                     'sync_job_id': sync_job_id,
+                    
+                    # Enhanced fields from PGN headers
+                    'white_username': pgn_headers.get('white'),
+                    'black_username': pgn_headers.get('black'),
+                    'white_rating': pgn_headers.get('white_elo'),
+                    'black_rating': pgn_headers.get('black_elo'),
+                    'user_color': 'white' if pgn_headers.get('white') == request.username else 'black' if pgn_headers.get('black') == request.username else None,
+                    'result': pgn_headers.get('result'),
+                    'time_control': pgn_headers.get('time_control'),
+                    'game_timestamp': pgn_headers.get('datetime'),
+                    'opening_name': pgn_headers.get('opening'),
+                    'eco_code': pgn_headers.get('eco'),
+                    
+                    # Game statistics
+                    'avg_accuracy': game_stats.get('avg_accuracy'),
+                    'total_moves': game_stats.get('total_moves'),
+                    'blunders_count': game_stats.get('blunders_count', 0),
+                    'mistakes_count': game_stats.get('mistakes_count', 0),
+                    'inaccuracies_count': game_stats.get('inaccuracies_count', 0),
+                    
+                    # Pinecone sync status
+                    'pinecone_uploaded': False,
+                    'pinecone_vector_count': 0,
+                    
                     'created_at': datetime.now(timezone.utc).isoformat()
                 }
                 
-                supabase.table('game_analysis').insert(game_analysis).execute()
+                result = supabase.table('game_analysis').insert(game_analysis).execute()
+                game_db_id = result.data[0]['id'] if result.data else None
                 analyzed_count += 1
                 
-                # Update progress
-                supabase.table('sync_jobs').update({
-                    'games_analyzed': analyzed_count
-                }).eq('id', sync_job_id).execute()
+                # Update progress using SyncJobManager
+                sync_job_manager.update_sync_job_progress(sync_job_id, games_analyzed=analyzed_count)
                 
-                # Upload to vector database
-                upload_to_pinecone(analyzed_moments)
+                # Upload to vector database with enhanced metadata
+                if game_db_id:
+                    try:
+                        from pinecone_upload import upload_supabase_game_to_pinecone, PINECONE_INDEX_NAME
+                        # Get the saved game with all metadata for Pinecone upload
+                        enhanced_game_data = game_analysis.copy()
+                        enhanced_game_data['id'] = game_db_id
+                        
+                        vector_count = upload_supabase_game_to_pinecone(enhanced_game_data, PINECONE_INDEX_NAME)
+                        
+                        # Update the record with Pinecone sync status
+                        if vector_count > 0:
+                            supabase.table('game_analysis').update({
+                                'pinecone_uploaded': True,
+                                'pinecone_vector_count': vector_count
+                            }).eq('id', game_db_id).execute()
+                            print(f"✅ Uploaded {vector_count} vectors to {PINECONE_INDEX_NAME}")
+                    except Exception as pinecone_error:
+                        print(f"Warning: Failed to upload to Pinecone: {pinecone_error}")
+                        # Continue processing even if Pinecone upload fails
                 
             except Exception as game_error:
                 print(f"Error analyzing game {i+1}: {game_error}")
+                import traceback
+                print(f"Full traceback: {traceback.format_exc()}")
                 continue
         
-        # Final status update
-        supabase.table('sync_jobs').update({
-            'status': 'completed',
-            'completed_at': datetime.now(timezone.utc).isoformat()
-        }).eq('id', sync_job_id).execute()
+        # Final status update using SyncJobManager
+        sync_job_manager.update_sync_job_status(sync_job_id, 'completed')
         
     except Exception as e:
-        # Update job with error
-        supabase.table('sync_jobs').update({
-            'status': 'failed',
-            'error': str(e),
-            'updated_at': datetime.now(timezone.utc).isoformat()
-        }).eq('id', sync_job_id).execute()
+        # Update job with error using SyncJobManager
+        sync_job_manager.update_sync_job_status(sync_job_id, 'failed', error=str(e))
         print(f"Sync job {sync_job_id} failed: {e}")
 
 @app.get("/sync-status/{sync_job_id}")
@@ -841,6 +731,97 @@ async def get_user_sync_jobs(user_id: str, current_user: User = Depends(get_curr
             "sync_jobs": result.data
         }
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/cleanup-stuck-sync-jobs")
+async def cleanup_stuck_sync_jobs(current_user: User = Depends(get_current_user)):
+    """
+    Admin endpoint to cleanup stuck sync jobs.
+    Marks jobs stuck in 'analyzing' status for more than 2 hours as failed.
+    """
+    try:
+        # Calculate cutoff time (2 hours ago)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        cutoff_iso = cutoff_time.isoformat()
+        
+        # Find stuck jobs
+        stuck_jobs_query = supabase.table('sync_jobs').select('*').eq('status', 'analyzing').execute()
+        
+        if not stuck_jobs_query.data:
+            return {"message": "No analyzing jobs found", "cleaned_up": 0}
+        
+        stuck_jobs = []
+        for job in stuck_jobs_query.data:
+            # Check if job is old enough (created more than 2 hours ago)
+            job_created = datetime.fromisoformat(job['created_at'].replace('Z', '+00:00'))
+            if job_created < cutoff_time:
+                stuck_jobs.append(job)
+        
+        if not stuck_jobs:
+            return {"message": "No stuck jobs found (all analyzing jobs are recent)", "cleaned_up": 0}
+        
+        # Update stuck jobs to failed status
+        cleaned_count = 0
+        for job in stuck_jobs:
+            try:
+                update_result = supabase.table('sync_jobs').update({
+                    'status': 'failed',
+                    'error': 'Job was stuck in analyzing status - cleaned up by admin',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', job['id']).execute()
+                
+                if update_result.data:
+                    cleaned_count += 1
+                    print(f"✅ Cleaned up stuck job: {job['id']} (user: {job['user_id']}, platform: {job['platform']})")
+                
+            except Exception as job_error:
+                print(f"❌ Failed to clean up job {job['id']}: {job_error}")
+        
+        return {
+            "message": f"Cleaned up {cleaned_count} stuck sync jobs",
+            "cleaned_up": cleaned_count,
+            "stuck_jobs": [{"id": job['id'], "user_id": job['user_id'], "platform": job['platform'], "created_at": job['created_at']} for job in stuck_jobs]
+        }
+        
+    except Exception as e:
+        print(f"Error in cleanup_stuck_sync_jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/fix-specific-sync-job/{sync_job_id}")
+async def fix_specific_sync_job(sync_job_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Admin endpoint to fix a specific stuck sync job by ID.
+    """
+    try:
+        # Get the job
+        job_result = supabase.table('sync_jobs').select('*').eq('id', sync_job_id).execute()
+        
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Sync job not found")
+        
+        job = job_result.data[0]
+        
+        # Update the job to failed status
+        update_result = supabase.table('sync_jobs').update({
+            'status': 'failed',
+            'error': f'Job was stuck in {job["status"]} status - manually fixed by admin',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', sync_job_id).execute()
+        
+        if update_result.data:
+            print(f"✅ Fixed stuck job: {sync_job_id} (user: {job['user_id']}, platform: {job['platform']})")
+            return {
+                "message": f"Successfully fixed stuck sync job {sync_job_id}",
+                "job": job,
+                "updated": update_result.data[0]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update sync job")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fixing sync job {sync_job_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/games/{user_id}")
@@ -1005,6 +986,323 @@ async def reanalyze_game_position(
     except Exception as e:
         print(f"Error analyzing position for game {game_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to analyze position: {str(e)}")
+
+@app.get("/user-profile/{user_id}/weaknesses")
+async def get_user_weaknesses(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    days: int = Query(30, ge=7, le=90)
+):
+    """
+    Get user's weakness analysis based on recent games using vector similarity.
+    """
+    # Verify user can access this data
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        from user_profiling_integration import UserProfiler
+        profiler = UserProfiler()
+        
+        weaknesses = profiler.analyze_user_weaknesses(user_id, days)
+        
+        if 'error' in weaknesses:
+            raise HTTPException(status_code=500, detail=weaknesses['error'])
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "analysis": weaknesses
+        }
+        
+    except Exception as e:
+        print(f"Error getting user weaknesses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/user-profile/{user_id}/similar-players")
+async def get_similar_players(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    rating_range: int = Query(100, ge=50, le=500)
+):
+    """
+    Find players with similar playing patterns and rating.
+    """
+    # Verify user can access this data
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        from user_profiling_integration import UserProfiler
+        profiler = UserProfiler()
+        
+        similar_players = profiler.find_similar_players(user_id, rating_range)
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "similar_players": similar_players,
+            "rating_range": rating_range
+        }
+        
+    except Exception as e:
+        print(f"Error finding similar players: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/user-profile/{user_id}/training-positions")
+async def get_training_positions(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    skill_focus: Optional[str] = Query(None, regex=r"^(Tactics|Strategy|Openings|Endgames|Time Management)$"),
+    difficulty: str = Query("adaptive", regex=r"^(easy|medium|hard|adaptive)$"),
+    limit: int = Query(10, ge=1, le=50)
+):
+    """
+    Get personalized training positions based on user's weaknesses.
+    """
+    # Verify user can access this data
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        from user_profiling_integration import UserProfiler
+        profiler = UserProfiler()
+        
+        positions = profiler.get_personalized_training_positions(
+            user_id, 
+            skill_focus=skill_focus, 
+            difficulty=difficulty
+        )
+        
+        # Limit results
+        positions = positions[:limit]
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "training_positions": positions,
+            "filters": {
+                "skill_focus": skill_focus,
+                "difficulty": difficulty,
+                "limit": limit
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting training positions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/similar-positions")
+async def get_similar_positions(request: SimilarPositionsRequest):
+    """
+    Get similar positions from the vector database.
+    """
+    try:
+        from pinecone_upload import query_vector_db
+        
+        # Create a text representation of the position for querying
+        query_text = f"Position: {request.fen}"
+        
+        # Query the vector database
+        similar_positions = query_vector_db(
+            query_text=query_text,
+            user_id=request.user_id,
+            skill_category=request.skill_category,
+            phase=request.phase,
+            top_k=request.top_k
+        )
+        
+        return {
+            "status": "success",
+            "similar_positions": similar_positions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/recommendations")
+async def create_recommendation(request: RecommendationRequest):
+    """
+    Create a new recommendation for a user.
+    """
+    try:
+        from pinecone_upload import query_vector_db
+        
+        # Get similar positions for this game
+        similar_positions = query_vector_db(
+            query_text=f"Position: {request.fen}",
+            user_id=request.user_id,
+            top_k=5
+        )
+        
+        # Create recommendation based on similar positions
+        recommendation = {
+            "user_id": request.user_id,
+            "game_analysis_id": request.game_analysis_id,
+            "recommendation": "Practice this position to improve your understanding of similar positions.",
+            "priority": request.priority,
+            "status": "pending",
+            "similar_positions": similar_positions
+        }
+        
+        # Store in database
+        from config.database import supabase
+        result = supabase.table('recommendations').insert(recommendation).execute()
+        
+        return {
+            "status": "success",
+            "recommendation": result.data[0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recommendations/{user_id}")
+async def get_user_recommendations(user_id: str):
+    """
+    Get all recommendations for a user.
+    """
+    try:
+        from config.database import supabase
+        
+        result = supabase.table('recommendations')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .order('priority', desc=True)\
+            .execute()
+        
+        return {
+            "status": "success",
+            "recommendations": result.data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/recommendations/{recommendation_id}")
+async def update_recommendation_status(recommendation_id: str, status: str):
+    """
+    Update the status of a recommendation.
+    """
+    try:
+        from config.database import supabase
+        
+        result = supabase.table('recommendations')\
+            .update({'status': status})\
+            .eq('id', recommendation_id)\
+            .execute()
+        
+        return {
+            "status": "success",
+            "recommendation": result.data[0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/vector-db/status")
+async def get_vector_db_status(current_user: User = Depends(get_current_user)):
+    """
+    Get status and statistics of the vector database.
+    Admin endpoint to monitor the vector DB health.
+    """
+    try:
+        from pinecone_upload import pc, PINECONE_INDEX_NAME, test_vector_db_connection
+        
+        # Test connection
+        connection_ok = test_vector_db_connection()
+        
+        if not connection_ok:
+            raise HTTPException(status_code=503, detail="Vector database connection failed")
+        
+        # Get index statistics
+        index = pc.Index(PINECONE_INDEX_NAME)
+        stats = index.describe_index_stats()
+        
+        # Get sync status from Supabase
+        sync_status_query = supabase.table('game_analysis').select(
+            'pinecone_uploaded, pinecone_vector_count'
+        ).execute()
+        
+        total_games = len(sync_status_query.data) if sync_status_query.data else 0
+        synced_games = len([g for g in sync_status_query.data if g.get('pinecone_uploaded')]) if sync_status_query.data else 0
+        total_vectors_expected = sum(g.get('pinecone_vector_count', 0) for g in sync_status_query.data) if sync_status_query.data else 0
+        
+        return {
+            "status": "healthy",
+            "index_name": PINECONE_INDEX_NAME,
+            "connection": "ok" if connection_ok else "failed",
+            "vector_stats": {
+                "total_vectors": stats.get('total_vector_count', 0),
+                "dimension": stats.get('dimension', 1024),
+                "fullness": stats.get('index_fullness', 0),
+                "namespaces": list(stats.get('namespaces', {}).keys()) if stats.get('namespaces') else ['default']
+            },
+            "sync_status": {
+                "total_games_in_supabase": total_games,
+                "games_synced_to_pinecone": synced_games,
+                "sync_percentage": (synced_games / total_games * 100) if total_games > 0 else 0,
+                "total_vectors_expected": total_vectors_expected
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting vector DB status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/vector-db/sync")
+async def trigger_vector_db_sync(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    user_id: Optional[str] = None,
+    limit: Optional[int] = None,
+    force_resync: bool = False
+):
+    """
+    Trigger a sync of game data to the vector database.
+    Admin endpoint to manually sync data.
+    """
+    try:
+        # Add sync task to background
+        background_tasks.add_task(
+            run_vector_db_sync,
+            user_id=user_id,
+            limit=limit,
+            force_resync=force_resync
+        )
+        
+        return {
+            "status": "sync_started",
+            "message": "Vector database sync started in background",
+            "parameters": {
+                "user_id": user_id,
+                "limit": limit,
+                "force_resync": force_resync
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error triggering vector DB sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def run_vector_db_sync(user_id: Optional[str] = None, limit: Optional[int] = None, force_resync: bool = False):
+    """
+    Background task to sync data to vector database.
+    """
+    try:
+        print(f"🚀 Starting vector DB sync - user_id: {user_id}, limit: {limit}, force_resync: {force_resync}")
+        
+        # Import sync function
+        from sync_to_pinecone import sync_games_to_pinecone
+        
+        # Run the sync
+        stats = sync_games_to_pinecone(
+            user_id=user_id,
+            limit=limit,
+            only_unsynced=not force_resync,
+            dry_run=False
+        )
+        
+        print(f"✅ Vector DB sync completed: {stats}")
+        
+    except Exception as e:
+        print(f"❌ Vector DB sync failed: {e}")
 
 if __name__ == "__main__":
     import uvicorn

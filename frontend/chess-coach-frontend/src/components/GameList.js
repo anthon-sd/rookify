@@ -36,17 +36,23 @@ const GameList = ({ onGameSelect, selectedGameId }) => {
         filters.platform || null
       );
 
+      // Handle different response formats
+      const gamesList = Array.isArray(response) ? response : (response.games || response.data || []);
+      const total = response.total || (Array.isArray(response) ? response.length : gamesList.length);
+      const hasMore = response.has_more || false;
+      const limit = response.limit || pagination.limit;
+
       if (reset) {
-        setGames(response.games);
+        setGames(gamesList);
       } else {
-        setGames(prev => offset === 0 ? response.games : [...prev, ...response.games]);
+        setGames(prev => offset === 0 ? gamesList : [...prev, ...gamesList]);
       }
 
       setPagination(prev => ({
         ...prev,
-        offset: reset ? response.limit : offset,
-        total: response.total,
-        hasMore: response.has_more
+        offset: reset ? limit : offset,
+        total: total,
+        hasMore: hasMore
       }));
 
     } catch (error) {
@@ -90,16 +96,13 @@ const GameList = ({ onGameSelect, selectedGameId }) => {
     return 'Unknown';
   };
 
-  const getResultIcon = (result, whitePlayer, blackPlayer, currentUsername) => {
-    if (!result || !currentUsername) return '⚪';
-    
-    const isUserWhite = whitePlayer?.toLowerCase().includes(currentUsername.toLowerCase());
-    const isUserBlack = blackPlayer?.toLowerCase().includes(currentUsername.toLowerCase());
+  const getResultIcon = (result, whitePlayer, blackPlayer, userColor) => {
+    if (!result) return '⚪';
     
     if (result === '1-0') {
-      return isUserWhite ? '🟢' : '🔴'; // Win/Loss
+      return userColor === 'white' ? '🟢' : '🔴'; // Win/Loss
     } else if (result === '0-1') {
-      return isUserBlack ? '🟢' : '🔴'; // Win/Loss
+      return userColor === 'black' ? '🟢' : '🔴'; // Win/Loss
     } else if (result === '1/2-1/2') {
       return '🟡'; // Draw
     }
@@ -119,10 +122,14 @@ const GameList = ({ onGameSelect, selectedGameId }) => {
     if (filters.result && game.result !== filters.result) return false;
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
+      const whitePlayer = game.white_username || game.white_player || '';
+      const blackPlayer = game.black_username || game.black_player || '';
+      const opening = game.opening_name || '';
+      
       return (
-        game.white_player?.toLowerCase().includes(searchLower) ||
-        game.black_player?.toLowerCase().includes(searchLower) ||
-        game.opening_name?.toLowerCase().includes(searchLower)
+        whitePlayer.toLowerCase().includes(searchLower) ||
+        blackPlayer.toLowerCase().includes(searchLower) ||
+        opening.toLowerCase().includes(searchLower)
       );
     }
     return true;
@@ -175,44 +182,84 @@ const GameList = ({ onGameSelect, selectedGameId }) => {
       )}
 
       <div className="game-list-content">
-        {filteredGames.map((game) => (
-          <div
-            key={game.id}
-            className={`game-item ${selectedGameId === game.id ? 'selected' : ''}`}
-            onClick={() => onGameSelect(game)}
-          >
-            <div className="game-item-header">
-              <div className="game-players">
-                <span className="platform-icon" title={game.platform}>
-                  {getPlatformIcon(game.platform)}
-                </span>
-                <span className="white-player">{game.white_player || 'Unknown'}</span>
-                <span className="vs">vs</span>
-                <span className="black-player">{game.black_player || 'Unknown'}</span>
-                <span className="result-icon">
-                  {getResultIcon(game.result, game.white_player, game.black_player, 'current_user')}
-                </span>
-              </div>
-              <div className="game-result">{game.result || 'Unknown'}</div>
-            </div>
-
-            <div className="game-item-details">
-              <div className="game-meta">
-                <span className="game-date">{formatDate(game.game_date)}</span>
-                <span className="time-control">{formatTimeControl(game.time_control)}</span>
-                <span className="opening">{game.opening_name || 'Unknown Opening'}</span>
-              </div>
-              
-              {game.key_moments && game.key_moments.length > 0 && (
-                <div className="key-moments-preview">
-                  <span className="moments-count">
-                    {game.key_moments.length} key moment{game.key_moments.length !== 1 ? 's' : ''}
+        {filteredGames.map((game) => {
+          // Handle the actual data structure from backend
+          const whiteUsername = game.white_username || game.white_player || 'Unknown';
+          const blackUsername = game.black_username || game.black_player || 'Unknown';
+          const gameDate = game.game_timestamp || game.created_at || game.game_date;
+          const keyMoments = game.key_moments || [];
+          const keyMomentsCount = (() => {
+            if (Array.isArray(keyMoments)) {
+              return keyMoments.length;
+            }
+            if (typeof keyMoments === 'string') {
+              try {
+                const parsed = JSON.parse(keyMoments);
+                return Array.isArray(parsed) ? parsed.length : 0;
+              } catch (error) {
+                console.warn('Failed to parse key_moments JSON:', error);
+                return 0;
+              }
+            }
+            return 0;
+          })();
+          
+          return (
+            <div
+              key={game.id}
+              className={`game-item ${selectedGameId === game.id ? 'selected' : ''}`}
+              onClick={() => onGameSelect(game)}
+            >
+              <div className="game-item-header">
+                <div className="game-players">
+                  <span className="platform-icon" title={game.platform}>
+                    {getPlatformIcon(game.platform)}
+                  </span>
+                  <span className="white-player">{whiteUsername}</span>
+                  <span className="vs">vs</span>
+                  <span className="black-player">{blackUsername}</span>
+                  <span className="result-icon">
+                    {getResultIcon(game.result, whiteUsername, blackUsername, game.user_color)}
                   </span>
                 </div>
-              )}
+                <div className="game-result">{game.result || 'Unknown'}</div>
+              </div>
+
+              <div className="game-item-details">
+                <div className="game-meta">
+                  <span className="game-date">{formatDate(gameDate)}</span>
+                  <span className="time-control">{formatTimeControl(game.time_control)}</span>
+                  <span className="opening">{game.opening_name || 'Unknown Opening'}</span>
+                </div>
+                
+                <div className="game-stats">
+                  {keyMomentsCount > 0 && (
+                    <div className="key-moments-preview">
+                      <span className="moments-count">
+                        {keyMomentsCount} move{keyMomentsCount !== 1 ? 's' : ''} analyzed
+                      </span>
+                    </div>
+                  )}
+                  
+                  {game.total_moves && (
+                    <div className="total-moves">
+                      <span className="moves-count">
+                        {game.total_moves} total moves
+                      </span>
+                    </div>
+                  )}
+                  
+                  {(game.blunders_count > 0 || game.mistakes_count > 0) && (
+                    <div className="accuracy-summary">
+                      {game.blunders_count > 0 && <span className="blunders">{game.blunders_count} blunders</span>}
+                      {game.mistakes_count > 0 && <span className="mistakes">{game.mistakes_count} mistakes</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {loading && (
           <div className="loading-spinner">

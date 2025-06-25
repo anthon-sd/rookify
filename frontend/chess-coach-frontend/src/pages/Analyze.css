@@ -588,4 +588,171 @@
     align-items: flex-start;
     gap: 0.25rem;
   }
+}
+
+/* Enhanced Move Timeline Styles */
+.key-moment-item {
+  padding: 1rem;
+  background: #F7FAFC;
+  border-radius: 8px;
+  border-left: 4px solid #3182CE;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+
+.key-moment-item:hover {
+  background: #EDF2F7;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateX(2px);
+}
+
+.key-moment-item.brilliant {
+  border-left-color: #9F7AEA;
+  background: #FAF5FF;
+}
+
+.key-moment-item.great {
+  border-left-color: #38A169;
+  background: #F0FFF4;
+}
+
+.key-moment-item.good {
+  border-left-color: #3182CE;
+  background: #EBF8FF;
+}
+
+.key-moment-item.inaccuracy {
+  border-left-color: #ECC94B;
+  background: #FFFAF0;
+}
+
+.key-moment-item.mistake {
+  border-left-color: #ED8936;
+  background: #FFFAF0;
+}
+
+.key-moment-item.miss,
+.key-moment-item.blunder {
+  border-left-color: #E53E3E;
+  background: #FFF5F5;
+}
+
+.key-moment-item.unknown {
+  border-left-color: #A0AEC0;
+  background: #F7FAFC;
+}
+
+.moment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.moment-move {
+  font-weight: 600;
+  color: #2D3748;
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+}
+
+.accuracy-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.accuracy-badge.brilliant {
+  background: #9F7AEA;
+  color: white;
+}
+
+.accuracy-badge.great {
+  background: #38A169;
+  color: white;
+}
+
+.accuracy-badge.good {
+  background: #3182CE;
+  color: white;
+}
+
+.accuracy-badge.inaccuracy {
+  background: #ECC94B;
+  color: #744210;
+}
+
+.accuracy-badge.mistake {
+  background: #ED8936;
+  color: white;
+}
+
+.accuracy-badge.miss,
+.accuracy-badge.blunder {
+  background: #E53E3E;
+  color: white;
+}
+
+.accuracy-badge.unknown {
+  background: #A0AEC0;
+  color: white;
+}
+
+.moment-eval {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+  color: #4A5568;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.moment-analysis {
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Analysis Sidebar Enhancements */
+.analysis-sidebar h3 {
+  margin: 0 0 1rem 0;
+  color: #2D3748;
+  font-size: 1.1rem;
+  border-bottom: 2px solid #E2E8F0;
+  padding-bottom: 0.5rem;
+}
+
+.feedback-panel h3 {
+  border-bottom: 2px solid #E2E8F0;
+  padding-bottom: 0.5rem;
+}
+
+/* Move timeline scrolling */
+.key-moments-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.key-moments-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.key-moments-list::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 3px;
+}
+
+.key-moments-list::-webkit-scrollbar-thumb {
+  background: #CBD5E0;
+  border-radius: 3px;
+}
+
+.key-moments-list::-webkit-scrollbar-thumb:hover {
+  background: #A0AEC0;
 } 

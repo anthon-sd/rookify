@@ -71,7 +71,7 @@ class GameAnalyzer:
         """Detect tactical features in a position"""
         features = {
             'is_check': board.is_check(),
-            'is_capture': move.to_square in [square for square in board.occupied] if move else False,
+            'is_capture': board.is_capture(move) if move else False,
             'is_castle': move and board.is_castling(move) if move else False,
             'piece_count': board.occupied.bit_count(),
             'is_tactical': False
@@ -174,8 +174,23 @@ class GameAnalyzer:
         Returns:
             List[Dict]: Analyzed moments with identified key positions
         """
+        print(f"🔍 ANALYZER DEBUG: analyze_game_moments called with:")
+        print(f"   - moments type: {type(moments)}")
+        print(f"   - moments value: {moments}")
+        print(f"   - depth: {depth} (type: {type(depth)})")
+        print(f"   - user_rating: {user_rating} (type: {type(user_rating)})")
+        print(f"   - user_level: {user_level} (type: {type(user_level)})")
+        
         if not moments:
+            print("🔍 ANALYZER DEBUG: moments is empty, returning []")
             return []
+        
+        # Validation: ensure moments is a list
+        if not isinstance(moments, list):
+            print(f"❌ ANALYZER ERROR: moments parameter is not a list, got {type(moments)}: {moments}")
+            return []
+        
+        print(f"🔍 ANALYZER DEBUG: moments is a list with {len(moments)} items")
 
         analyzed_moments = []
         all_recommendations = []

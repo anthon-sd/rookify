@@ -7,6 +7,12 @@
   border: 1px solid #E2E8F0;
 }
 
+.sync-progress.enhanced {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #CBD5E0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .sync-header {
   margin-bottom: 1.5rem;
   border-bottom: 1px solid #E2E8F0;
@@ -27,10 +33,19 @@
   gap: 1rem;
   color: #718096;
   font-size: 0.9rem;
+  flex-wrap: wrap;
 }
 
 .sync-status {
   margin-bottom: 1.5rem;
+}
+
+.sync-status-enhanced {
+  margin-bottom: 1.5rem;
+}
+
+.status-main {
+  margin-bottom: 1rem;
 }
 
 .status-row {
@@ -55,6 +70,43 @@
   color: #2D3748;
 }
 
+.last-update {
+  font-size: 0.8rem;
+  color: #A0AEC0;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* Progress Grid */
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.progress-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #F7FAFC;
+  border-radius: 6px;
+  border-left: 3px solid #3182CE;
+}
+
+.progress-label {
+  font-weight: 500;
+  color: #4A5568;
+  font-size: 0.9rem;
+}
+
+.progress-value {
+  font-weight: 600;
+  color: #2D3748;
+  font-size: 0.9rem;
+}
+
 .progress-bar-container {
   display: flex;
   align-items: center;
@@ -62,18 +114,22 @@
   margin-bottom: 1rem;
 }
 
+.progress-bar-container.enhanced {
+  margin-bottom: 1.5rem;
+}
+
 .progress-bar {
   flex: 1;
-  height: 8px;
+  height: 10px;
   background-color: #E2E8F0;
-  border-radius: 4px;
+  border-radius: 5px;
   overflow: hidden;
   position: relative;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 5px;
   transition: width 0.3s ease;
   position: relative;
 }
@@ -94,9 +150,29 @@
   animation: shimmer 2s infinite;
 }
 
+.progress-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: pulse-wave 3s infinite;
+}
+
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+@keyframes pulse-wave {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
 }
 
 .progress-text {
@@ -106,6 +182,64 @@
   text-align: right;
 }
 
+/* Performance Metrics */
+.performance-metrics {
+  background: linear-gradient(135deg, #EBF8FF 0%, #BEE3F8 100%);
+  border: 1px solid #90CDF4;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.performance-metrics h4 {
+  margin: 0 0 1rem 0;
+  color: #2B6CB0;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.metric-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #E2E8F0;
+  transition: transform 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2B6CB0;
+  margin-bottom: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4A5568;
+  margin-bottom: 0.25rem;
+}
+
+.metric-subtitle {
+  font-size: 0.75rem;
+  color: #718096;
+  font-style: italic;
+}
+
+/* Enhanced Completion Summary */
 .completion-summary {
   background: #F0FFF4;
   border: 1px solid #9AE6B4;
@@ -114,14 +248,44 @@
   margin-top: 1rem;
 }
 
+.completion-summary.enhanced {
+  background: linear-gradient(135deg, #F0FFF4 0%, #C6F6D5 100%);
+  border: 1px solid #68D391;
+  padding: 1.5rem;
+}
+
+.completion-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #9AE6B4;
+  padding-bottom: 1rem;
+}
+
+.completion-header h4 {
+  margin: 0 0 0.5rem 0;
+  color: #22543D;
+  font-size: 1.3rem;
+}
+
+.completion-time {
+  color: #2F855A;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
 .completion-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .stat {
   text-align: center;
+  background: white;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #9AE6B4;
 }
 
 .stat-number {
@@ -139,6 +303,18 @@
   letter-spacing: 0.5px;
 }
 
+.completion-message {
+  text-align: center;
+  color: #2F855A;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #9AE6B4;
+}
+
+/* Enhanced Error Display */
 .error-details {
   background: #FFF5F5;
   border: 1px solid #FEB2B2;
@@ -147,15 +323,49 @@
   margin-top: 1rem;
 }
 
-.error-details h4 {
-  margin: 0 0 0.5rem 0;
-  color: #E53E3E;
+.error-details.enhanced {
+  background: linear-gradient(135deg, #FFF5F5 0%, #FED7D7 100%);
+  padding: 1.5rem;
 }
 
-.error-details p {
-  margin: 0;
+.error-details h4 {
+  margin: 0 0 0.75rem 0;
+  color: #E53E3E;
+  font-size: 1.1rem;
+}
+
+.error-message {
   color: #C53030;
   font-size: 0.9rem;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.error-duration {
+  color: #E53E3E;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.error-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.retry-button {
+  background: #E53E3E;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.retry-button:hover {
+  background: #C53030;
 }
 
 .polling-indicator {
@@ -168,6 +378,13 @@
   font-size: 0.9rem;
   border-top: 1px solid #E2E8F0;
   margin-top: 1rem;
+}
+
+.polling-indicator.enhanced {
+  background: #F7FAFC;
+  border-radius: 6px;
+  border: 1px solid #E2E8F0;
+  margin-top: 1.5rem;
 }
 
 .spinner {
@@ -213,8 +430,18 @@
     gap: 0.25rem;
   }
   
-  .completion-stats {
+  .progress-grid {
     grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .completion-stats {
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
   }
   
@@ -226,5 +453,21 @@
   
   .progress-text {
     text-align: center;
+  }
+
+  .metric-card {
+    padding: 0.75rem;
+  }
+
+  .metric-value {
+    font-size: 1.25rem;
+  }
+
+  .performance-metrics {
+    padding: 1rem;
+  }
+
+  .completion-summary.enhanced {
+    padding: 1rem;
   }
 } 

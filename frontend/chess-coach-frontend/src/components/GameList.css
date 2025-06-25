@@ -303,4 +303,62 @@
   .opening {
     font-size: 0.8rem;
   }
+}
+
+/* New styles for enhanced game stats */
+.game-stats {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.total-moves {
+  display: flex;
+  align-items: center;
+}
+
+.moves-count {
+  font-size: 0.8rem;
+  color: #4A5568;
+  background: #F7FAFC;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.accuracy-summary {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.blunders,
+.mistakes {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.blunders {
+  background: #FFF5F5;
+  color: #E53E3E;
+  border: 1px solid #FEB2B2;
+}
+
+.mistakes {
+  background: #FFFAF0;
+  color: #DD6B20;
+  border: 1px solid #FBD38D;
+}
+
+/* Update existing moments count styling */
+.moments-count {
+  font-size: 0.8rem;
+  color: #2B6CB0;
+  background: #EBF8FF;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid #BEE3F8;
 } 

@@ -3,8 +3,15 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import json
 import uuid
+import os
+from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase client
+url = os.environ.get("SUPABASE_URL")
+key = os.environ.get("SUPABASE_ANON_KEY")
+supabase: Client = create_client(url, key)
 
 class DatabaseBatchOperations:
     """Utility class for efficient batch database operations"""
@@ -242,4 +249,143 @@ class ProgressTracker:
             'success_rate': (self.successful_items / max(self.processed_items, 1)) * 100,
             'total_time_seconds': elapsed,
             'items_per_second': self.processed_items / max(elapsed, 1)
-        } 
+        }
+
+def extract_pgn_headers(pgn: str) -> Dict:
+    """
+    Extract metadata from PGN headers.
+    
+    Args:
+        pgn: PGN string
+        
+    Returns:
+        Dictionary with extracted metadata
+    """
+    headers = {}
+    
+    if not pgn:
+        return headers
+    
+    lines = pgn.split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.startswith('[') and line.endswith(']'):
+            # Parse PGN headers like [White "username"]
+            parts = line[1:-1].split(' ', 1)
+            if len(parts) == 2:
+                key, value = parts
+                value = value.strip('"')
+                
+                if key == 'White':
+                    headers['white'] = value
+                elif key == 'Black':
+                    headers['black'] = value
+                elif key == 'WhiteElo':
+                    try:
+                        headers['white_elo'] = int(value)
+                    except ValueError:
+                        pass
+                elif key == 'BlackElo':
+                    try:
+                        headers['black_elo'] = int(value)
+                    except ValueError:
+                        pass
+                elif key == 'Result':
+                    headers['result'] = value
+                elif key == 'TimeControl':
+                    headers['time_control'] = value
+                elif key == 'UTCDate':
+                    headers['date'] = value
+                elif key == 'UTCTime':
+                    headers['time'] = value
+                elif key == 'Opening':
+                    headers['opening'] = value
+                elif key == 'ECO':
+                    headers['eco'] = value
+    
+    # Combine date and time into datetime if both exist
+    if headers.get('date') and headers.get('time'):
+        try:
+            datetime_str = f"{headers['date']} {headers['time']}"
+            dt = datetime.strptime(datetime_str, "%Y.%m.%d %H:%M:%S")
+            headers['datetime'] = dt.isoformat() + 'Z'
+        except ValueError:
+            pass
+    
+    return headers
+
+def determine_user_color(user_id: str, pgn_headers: Dict) -> Optional[str]:
+    """
+    Determine which color the user was playing based on available information.
+    This is a placeholder - you might need to implement logic based on your user data.
+    
+    Args:
+        user_id: User ID
+        pgn_headers: Extracted PGN headers
+        
+    Returns:
+        'white' or 'black' or None if can't determine
+    """
+    # This is a placeholder implementation
+    # You would need to implement actual logic based on your user data
+    # For now, return None and let it be filled manually or by other means
+    return None
+
+def calculate_game_statistics(analyzed_moments) -> Dict:
+    """
+    Calculate game statistics from analyzed moments.
+    
+    Args:
+        analyzed_moments: List or JSON string of analyzed moments
+        
+    Returns:
+        Dictionary with game statistics
+    """
+    stats = {
+        'total_moves': 0,
+        'blunders_count': 0,
+        'mistakes_count': 0,
+        'inaccuracies_count': 0,
+        'avg_accuracy': None
+    }
+    
+    try:
+        # Parse moments if it's a string
+        if isinstance(analyzed_moments, str):
+            moments = json.loads(analyzed_moments)
+        else:
+            moments = analyzed_moments or []
+        
+        if not moments:
+            return stats
+        
+        stats['total_moves'] = len(moments)
+        
+        accuracy_scores = []
+        
+        for moment in moments:
+            accuracy_class = moment.get('accuracy_class', '').lower()
+            
+            if 'blunder' in accuracy_class:
+                stats['blunders_count'] += 1
+            elif 'mistake' in accuracy_class or 'miss' in accuracy_class:
+                stats['mistakes_count'] += 1
+            elif 'inaccuracy' in accuracy_class:
+                stats['inaccuracies_count'] += 1
+            
+            # Calculate accuracy score (lower delta_cp = higher accuracy)
+            delta_cp = moment.get('delta_cp', 0)
+            if delta_cp is not None:
+                # Convert centipawn loss to accuracy percentage (0-100)
+                # Perfect move = 100%, blunder = lower score
+                accuracy = max(0, 100 - (delta_cp / 10))  # Rough approximation
+                accuracy_scores.append(accuracy)
+        
+        # Calculate average accuracy
+        if accuracy_scores:
+            stats['avg_accuracy'] = sum(accuracy_scores) / len(accuracy_scores)
+    
+    except Exception as e:
+        print(f"Error calculating game statistics: {e}")
+    
+    return stats 
