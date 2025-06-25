@@ -1,51 +1,107 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Import Tailwind CSS base styles */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Import our custom global styles and theme */
+@import './styles/globals.css';
+
+/* Import Google Fonts for our theme typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
+    /* Rookify Brand Colors - Light Mode */
     --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
+    --foreground: 220 39% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
+    --card-foreground: 220 39% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220.9 39.3% 11%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
+    --popover-foreground: 220 39% 11%;
+    
+    /* Primary: Deep Chess Navy */
+    --primary: 220 39% 11%;
+    --primary-foreground: 0 0% 98%;
+    
+    /* Secondary: Rook Gold */
+    --secondary: 38 92% 50%;
+    --secondary-foreground: 220 39% 11%;
+    
+    /* Muted colors */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    
+    /* Accent: Chess Green */
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 98%;
+    
+    /* Destructive: Chess Red */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    
+    /* Borders and inputs */
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 224 71.4% 4.1%;
-    --radius: 0.5rem;
+    --ring: 220 39% 11%;
+    
+    /* Charts */
+    --chart-1: 220 39% 11%;
+    --chart-2: 38 92% 50%;
+    --chart-3: 160 84% 39%;
+    --chart-4: 271 81% 56%;
+    --chart-5: 0 84% 60%;
+    
+    --radius: 0.75rem;
+    
+    /* Rookify Custom Brand Colors */
+    --rookify-navy: 220 39% 11%;
+    --rookify-gold: 38 92% 50%;
+    --rookify-green: 160 84% 39%;
+    --rookify-purple: 271 81% 56%;
+    --rookify-red: 0 84% 60%;
+    --rookify-slate: 220 9% 46%;
   }
 
   .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71.4% 4.1%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 210 20% 98%;
-    --primary-foreground: 220.9 39.3% 11%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 215 27.9% 16.9%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 216 12.2% 83.9%;
+    /* Rookify Brand Colors - Dark Mode */
+    --background: 220 39% 11%;
+    --foreground: 0 0% 98%;
+    --card: 220 27% 18%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 27% 18%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Primary: Rook Gold in dark mode */
+    --primary: 38 92% 50%;
+    --primary-foreground: 220 39% 11%;
+    
+    /* Secondary: Dark navy variation */
+    --secondary: 220 27% 18%;
+    --secondary-foreground: 0 0% 98%;
+    
+    /* Muted colors for dark mode */
+    --muted: 220 27% 18%;
+    --muted-foreground: 220 9% 65%;
+    
+    /* Accent: Brighter chess green for dark mode */
+    --accent: 160 84% 45%;
+    --accent-foreground: 220 39% 11%;
+    
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    
+    /* Borders and inputs for dark mode */
+    --border: 220 27% 18%;
+    --input: 220 27% 18%;
+    --ring: 38 92% 50%;
+    
+    /* Dark mode chart colors */
+    --chart-1: 38 92% 50%;
+    --chart-2: 160 84% 45%;
+    --chart-3: 271 81% 65%;
+    --chart-4: 220 9% 65%;
+    --chart-5: 0 84% 60%;
   }
 }
 
@@ -55,5 +111,137 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
-} 
+}
+
+@layer components {
+  /* Rookify Brand Gradients */
+  .rookify-gradient {
+    @apply bg-gradient-to-br from-slate-900 via-amber-500 to-slate-800;
+  }
+
+  .rookify-gradient-alt {
+    @apply bg-gradient-to-r from-slate-900 to-emerald-600;
+  }
+
+  .rookify-gold-gradient {
+    @apply bg-gradient-to-r from-amber-400 to-yellow-500;
+  }
+
+  .glass-effect {
+    @apply backdrop-blur-lg bg-white/10 border border-white/20 dark:bg-slate-900/20 dark:border-slate-700/30;
+  }
+
+  .rookify-card {
+    @apply bg-white/95 backdrop-blur-sm border border-slate-200/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] dark:bg-slate-800/95 dark:border-slate-700/50;
+  }
+
+  .rookify-button {
+    @apply bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2;
+  }
+
+  .rookify-button-gold {
+    @apply bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-900 font-semibold rounded-xl px-6 py-3 transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2;
+  }
+
+  .rookify-button-green {
+    @apply bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2;
+  }
+
+  /* Enhanced typography */
+  .text-display {
+    font-family: var(--font-display);
+  }
+
+  .text-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Rookify glass effects */
+  .rookify-glass-navbar {
+    @apply glass-effect border-b border-slate-200/30 dark:border-slate-700/30;
+  }
+
+  .rookify-glass-sidebar {
+    @apply glass-effect border-r border-slate-200/30 dark:border-slate-700/30;
+  }
+
+  /* Enhanced interactive states */
+  .btn-primary {
+    @apply rookify-button;
+  }
+
+  .btn-secondary {
+    @apply bg-white/20 hover:bg-white/30 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 rounded-xl px-6 py-3 transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-2xl hover:-translate-y-1;
+  }
+
+  /* Loading states */
+  .loading-card {
+    @apply animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl;
+  }
+
+  .loading-text {
+    @apply animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-4;
+  }
+
+  /* Rookify specific components */
+  .rookify-nav-link {
+    @apply text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors duration-200 font-medium;
+  }
+
+  .rookify-nav-link-active {
+    @apply text-amber-600 dark:text-amber-400 font-semibold;
+  }
+
+  .rookify-badge {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 px-2 py-1 rounded-lg text-xs font-semibold;
+  }
+
+  .rookify-badge-success {
+    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 px-2 py-1 rounded-lg text-xs font-semibold;
+  }
+
+  .rookify-badge-error {
+    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 px-2 py-1 rounded-lg text-xs font-semibold;
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+.animate-pulse-slow {
+  animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Enhanced responsive design */
+@media (max-width: 768px) {
+  .rookify-card {
+    @apply rounded-lg;
+  }
+
+  .rookify-button {
+    @apply px-4 py-2 text-sm;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .rookify-card {
+    @apply border-2 border-slate-400;
+  }
+
+  .glass-effect {
+    @apply bg-white/50 border-2 border-slate-400 dark:bg-slate-800/50;
+  }
+}

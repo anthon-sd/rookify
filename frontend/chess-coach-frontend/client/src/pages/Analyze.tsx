@@ -1,670 +1,305 @@
-import { useState, useEffect, useRef } from 'react'
-import { Chessboard } from 'react-chessboard'
-import { Chess } from 'chess.js'
-import { useAuth } from '@/contexts/AuthContext'
-import { backendApi, type SyncJob, type GameData } from '@/lib/api'
-import { SyncModal } from '@/components/SyncModal'
-import { SyncProgress } from '@/components/SyncProgress'
-import { GameList } from '@/components/GameList'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useState, useEffect } from "react"
+import { getGames, getGameAnalysis } from "@/api/games"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, Star } from "lucide-react"
+import { useToast } from "@/hooks/useToast"
+
+interface Game {
+  id: string
+  opponent: string
+  result: 'win' | 'loss' | 'draw'
+  accuracy: number
+  date: string
+  opening: string
+  analysisStatus: 'completed' | 'in_progress' | 'pending'
+  keyInsight: string
+  timeControl: string
+}
+
+interface GameAnalysis {
+  moves: Array<{ move: string, evaluation: number, accuracy: string, comment?: string }>
+  criticalMoments: Array<{ moveNumber: number, type: string, description: string }>
+  summary: { accuracy: number, mistakes: number, blunders: number, brilliantMoves: number }
+  coachNotes: string
+}
 
 export function Analyze() {
-  const { user: supabaseUser } = useAuth()
-  
-  // Chess game state
-  const [game, setGame] = useState(new Chess())
-  const [selectedGame, setSelectedGame] = useState<string | null>(null)
-  const [selectedGameData, setSelectedGameData] = useState<GameData | null>(null)
-  const [currentMoveIndex, setCurrentMoveIndex] = useState(0)
-  const completeGameRef = useRef<Chess | null>(null)
-  
-  // Backend authentication
-  const [isBackendAuthenticated, setIsBackendAuthenticated] = useState(false)
-  
-  // Loading and error states
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadingGameAnalysis, setLoadingGameAnalysis] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  // Games data
-  const [games, setGames] = useState<GameData[]>([])
-  const [hasMoreGames, setHasMoreGames] = useState(true)
-  const [gameOffset, setGameOffset] = useState(0)
-  
-  // Sync-related state
-  const [syncModal, setSyncModal] = useState<{ isOpen: boolean; platform: 'chess.com' | 'lichess' | null }>({ 
-    isOpen: false, 
-    platform: null 
-  })
-  const [activeSyncJob, setActiveSyncJob] = useState<SyncJob | null>(null)
-  const [, setSyncHistory] = useState<SyncJob[]>([])
+  const [games, setGames] = useState<Game[]>([])
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null)
+  const [gameAnalysis, setGameAnalysis] = useState<GameAnalysis | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const { toast } = useToast()
 
-  // File upload
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Initialize backend authentication
   useEffect(() => {
-    const initializeBackendAuth = async () => {
-      console.log('🚀 Initializing backend authentication...')
-      console.log('Supabase user:', supabaseUser?.email)
-      console.log('Backend already authenticated:', backendApi.isAuthenticated())
-      
-      if (supabaseUser && !backendApi.isAuthenticated()) {
-        console.log('🔄 Starting backend authentication process...')
-        try {
-          const result = await backendApi.tryAutoLogin(supabaseUser)
-          if (result.success) {
-            console.log('✅ Backend authentication successful!')
-            setIsBackendAuthenticated(true)
-            void Promise.all([loadSyncHistory(), loadGames()])
-          } else {
-            console.log('❌ Backend auto-login failed:', result.message)
-            setError(`Backend authentication failed: ${result.message}`)
-          }
-        } catch (error: any) {
-          console.error('💥 Backend authentication error:', error)
-          setError(`Backend authentication error: ${error.message}`)
-        }
-      } else if (backendApi.isAuthenticated()) {
-        console.log('✅ Using existing backend authentication')
-        setIsBackendAuthenticated(true)
-        void Promise.all([loadSyncHistory(), loadGames()])
-      } else {
-        console.log('⏳ Waiting for Supabase user...')
+    const fetchGames = async () => {
+      try {
+        const data = await getGames() as { games: Game[] }
+        setGames(data.games)
+      } catch (error) {
+        console.error('Error fetching games:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load games",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
       }
     }
 
-    initializeBackendAuth()
-  }, [supabaseUser])
+    fetchGames()
+  }, [toast])
 
-  // Load sync history
-  const loadSyncHistory = async () => {
-    try {
-      console.log('📅 Loading sync history...')
-      const response = await backendApi.getSyncHistory()
-      console.log('📅 Sync history response:', response)
-      
-      const history = Array.isArray(response) ? response : []
-      setSyncHistory(history)
-      
-      // Check for any active sync jobs
-      const activeSyncs = history.filter(job => 
-        job.status === 'pending' || job.status === 'fetching' || job.status === 'analyzing'
-      )
-      
-      if (activeSyncs.length > 0) {
-        setActiveSyncJob(activeSyncs[0])
-        console.log('🔄 Found active sync job:', activeSyncs[0])
-      }
-    } catch (error: any) {
-      console.error('💥 Failed to load sync history:', error)
-      setSyncHistory([])
-    }
-  }
-
-  // Load games from backend
-  const loadGames = async (offset = 0, append = false) => {
-    if (!isBackendAuthenticated) {
-      console.log('🎮 Skipping games load - not authenticated')
-      return
-    }
-    
-    console.log('🎮 Loading games...')
-    setIsLoading(true)
-    try {
-      const gamesData = await backendApi.getGames(20, offset)
-      console.log('🎮 Games loaded:', gamesData)
-      
-      const gamesList = Array.isArray(gamesData) ? gamesData : []
-      
-      if (append) {
-        setGames(prev => [...prev, ...gamesList])
-      } else {
-        setGames(gamesList)
-      }
-      
-      setHasMoreGames(gamesList.length === 20)
-      setGameOffset(offset + gamesList.length)
-      
-      console.log('🎮 Games set:', gamesList.length, 'games')
-    } catch (error: any) {
-      console.error('💥 Failed to load games:', error)
-      if (!error.message.includes('404') && !error.message.includes('not found')) {
-        setError('Failed to load games: ' + error.message)
-      }
-      if (!append) {
-        setGames([])
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Load more games
-  const handleLoadMoreGames = () => {
-    loadGames(gameOffset, true)
-  }
-
-  // File upload handler
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      // TODO: Implement PGN file parsing
-      console.log('PGN file selected:', file.name)
-      setError('PGN file upload is not yet implemented. Please use the sync feature instead.')
-    }
-  }
-
-  // Sync handlers
-  const handleSyncButtonClick = (platform: 'chess.com' | 'lichess') => {
-    if (!supabaseUser) {
-      setError('Please login to sync your games')
-      return
-    }
-
-    if (!isBackendAuthenticated) {
-      setError('Backend authentication required. Please try refreshing the page.')
-      return
-    }
-
-    setSyncModal({ isOpen: true, platform })
-  }
-
-  const handleStartSync = async (syncData: any) => {
-    try {
-      setError(null)
-      const result = await backendApi.startSync(
-        syncData.platform,
-        syncData.username,
-        syncData.months,
-        syncData.lichessToken,
-        syncData.fromDate,
-        syncData.toDate,
-        syncData.gameMode,
-        syncData.result,
-        syncData.color
-      )
-      
-      setActiveSyncJob(result)
-      await loadSyncHistory()
-      
-      console.log('Sync started successfully:', result)
-    } catch (error: any) {
-      setError('Failed to start sync: ' + error.message)
-      throw error
-    }
-  }
-
-  const handleSyncComplete = async (syncResult: SyncJob) => {
-    console.log('Sync completed:', syncResult)
-    setActiveSyncJob(null)
-    void Promise.all([loadSyncHistory(), loadGames()])
-  }
-
-  const handleSyncError = (errorMessage: string) => {
-    setError('Sync failed: ' + errorMessage)
-    setActiveSyncJob(null)
-  }
-
-  // Game selection and analysis
-  const handleGameSelect = async (gameItem: GameData) => {
-    console.log('🎯 Game selected:', gameItem)
-    
-    if (!gameItem?.id) {
-      console.error('❌ Invalid game item:', gameItem)
-      setError('Invalid game selected')
-      return
-    }
-
-    if (!isBackendAuthenticated) {
-      setError('Backend authentication required to view game analysis')
-      return
-    }
-
-    setSelectedGame(gameItem.id)
-    setLoadingGameAnalysis(true)
-    setError(null)
+  const handleGameSelect = async (game: Game) => {
+    setSelectedGame(game)
+    setAnalysisLoading(true)
 
     try {
-      console.log('📡 Fetching game analysis for ID:', gameItem.id)
-      const gameData = await backendApi.getGameAnalysis(gameItem.id)
-      console.log('📊 Game analysis received:', gameData)
-      
-      setSelectedGameData(gameData)
-      
-      // Initialize the chess game with the PGN if available
-      if (gameData.pgn && typeof gameData.pgn === 'string' && gameData.pgn.trim().length > 0) {
-        try {
-          console.log('🎯 Loading PGN for game:', gameData.id)
-          
-          // Clean the PGN before attempting to parse it
-          let cleanedPgn = gameData.pgn.trim()
-            .replace(/\(\%[^)]*\)/g, '') // Remove malformed annotations
-            .replace(/\{[^}]*\}/g, '') // Remove comments in braces
-            .replace(/\([^)]*\)/g, '') // Remove parenthetical annotations
-            .replace(/\$\d+/g, '') // Remove numeric annotations
-            .replace(/\?+/g, '') // Remove question marks
-            .replace(/!+/g, '') // Remove exclamation marks
-            .replace(/[^\w\s\-\.=+#O\n\[\]]/g, ' ') // Keep only valid PGN characters
-            .replace(/\s+/g, ' ') // Normalize whitespace
-            .trim()
-          
-          // Create a new game and load the cleaned PGN
-          const newGame = new Chess()
-          
-          try {
-            newGame.loadPgn(cleanedPgn)
-            // If we get here, PGN was loaded successfully
-            console.log('✅ PGN loaded successfully')
-            console.log('📚 Total moves:', newGame.history().length)
-            
-            // Reset to starting position for navigation
-            const gameFromStart = new Chess()
-            setGame(gameFromStart)
-            setCurrentMoveIndex(0)
-            
-            // Store the complete game for navigation
-            completeGameRef.current = newGame
-            setError(null)
-          } catch (loadError) {
-            console.error('❌ Failed to load PGN:', loadError)
-            setError('Unable to parse game moves - PGN format may be corrupted')
-            setGame(new Chess())
-            setCurrentMoveIndex(0)
-            completeGameRef.current = null
-          }
-        } catch (pgnError: any) {
-          console.error('💥 Error loading PGN:', pgnError)
-          setError('Game moves are corrupted and cannot be parsed. Try re-syncing this game.')
-          setGame(new Chess())
-          setCurrentMoveIndex(0)
-          completeGameRef.current = null
-        }
-      } else {
-        console.log('⚠️ No valid PGN data available for this game')
-        setGame(new Chess())
-        setCurrentMoveIndex(0)
-        completeGameRef.current = null
-      }
-    } catch (error: any) {
-      setError('Failed to load game analysis: ' + error.message)
-      console.error('Error loading game analysis:', error)
-    } finally {
-      setLoadingGameAnalysis(false)
-    }
-  }
-
-  // Game navigation
-  const goToNextMove = () => {
-    if (!completeGameRef.current) return
-
-    const totalMoves = completeGameRef.current.history().length
-    
-    if (currentMoveIndex < totalMoves) {
-      const newGame = new Chess()
-      const moves = completeGameRef.current.history()
-      
-      for (let i = 0; i <= currentMoveIndex; i++) {
-        try {
-          newGame.move(moves[i])
-        } catch (moveError) {
-          console.error('❌ Error making move:', moves[i], moveError)
-          break
-        }
-      }
-      
-      setGame(newGame)
-      setCurrentMoveIndex(currentMoveIndex + 1)
-    }
-  }
-
-  const goToPreviousMove = () => {
-    if (!completeGameRef.current) return
-
-    if (currentMoveIndex > 0) {
-      const newGame = new Chess()
-      const moves = completeGameRef.current.history()
-      
-      for (let i = 0; i < currentMoveIndex - 1; i++) {
-        try {
-          newGame.move(moves[i])
-        } catch (moveError) {
-          console.error('❌ Error making move:', moves[i], moveError)
-          break
-        }
-      }
-      
-      setGame(newGame)
-      setCurrentMoveIndex(currentMoveIndex - 1)
-    }
-  }
-
-  const goToMove = (moveIndex: number) => {
-    if (!completeGameRef.current) return
-
-    const totalMoves = completeGameRef.current.history().length
-    
-    if (moveIndex >= 0 && moveIndex <= totalMoves) {
-      const newGame = new Chess()
-      const moves = completeGameRef.current.history()
-      
-      for (let i = 0; i < moveIndex; i++) {
-        try {
-          newGame.move(moves[i])
-        } catch (moveError) {
-          console.error('❌ Error making move:', moves[i], moveError)
-          break
-        }
-      }
-      
-      setGame(newGame)
-      setCurrentMoveIndex(moveIndex)
-    }
-  }
-
-  const getTotalMoves = () => {
-    return completeGameRef.current ? completeGameRef.current.history().length : 0
-  }
-
-  // Utility function to safely parse key moments
-  const parseKeyMoments = (keyMoments: string | any[] | undefined) => {
-    if (!keyMoments) return []
-    
-    try {
-      if (typeof keyMoments === 'string') {
-        const parsed = JSON.parse(keyMoments)
-        return Array.isArray(parsed) ? parsed : []
-      }
-      if (Array.isArray(keyMoments)) {
-        return keyMoments
-      }
-      return []
+      const analysis = await getGameAnalysis(game.id) as GameAnalysis
+      setGameAnalysis(analysis)
     } catch (error) {
-      console.warn('Failed to parse key_moments:', error)
-      return []
+      console.error('Error fetching game analysis:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load game analysis",
+        variant: "destructive",
+      })
+    } finally {
+      setAnalysisLoading(false)
     }
+  }
+
+  const getResultBadge = (result: string) => {
+    const variants = {
+      win: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      loss: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      draw: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+    }
+    return (
+      <Badge className={variants[result as keyof typeof variants]}>
+        {result.toUpperCase()}
+      </Badge>
+    )
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case 'in_progress':
+        return <Clock className="h-4 w-4 text-yellow-500" />
+      default:
+        return <AlertCircle className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getAccuracyColor = (accuracy: number) => {
+    if (accuracy >= 90) return "text-green-600"
+    if (accuracy >= 80) return "text-blue-600"
+    if (accuracy >= 70) return "text-yellow-600"
+    return "text-red-600"
+  }
+
+  const getMomentIcon = (type: string) => {
+    switch (type) {
+      case 'brilliant':
+        return <Star className="h-4 w-4 text-yellow-500" />
+      case 'blunder':
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      case 'mistake':
+        return <AlertCircle className="h-4 w-4 text-orange-500" />
+      default:
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-          Analyze Your Games
-        </h1>
-        <p className="text-xl text-muted-foreground">
-          Import your games and get AI-powered analysis to improve your play
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Game Analysis
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Review your games and learn from every move
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Import PGN
+          </Button>
+          <Button variant="outline" className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4" />
+            Connect Chess.com
+          </Button>
+        </div>
       </div>
 
-      {/* Authentication Status */}
-      {supabaseUser && (
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">👤</span>
-                <div>
-                  <p className="font-medium">Welcome, {supabaseUser.email}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {isBackendAuthenticated ? '🔒 Sync Ready' : '⚠️ Sync Authentication Required'}
-                  </p>
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Games Library */}
+        <Card className="chess-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+              Recent Games
+            </CardTitle>
+            <CardDescription>
+              Click on any game to view detailed analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {games.map((game) => (
+              <div
+                key={game.id}
+                onClick={() => handleGameSelect(game)}
+                className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md ${
+                  selectedGame?.id === game.id
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">vs {game.opponent}</span>
+                    {getResultBadge(game.result)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(game.analysisStatus)}
+                    <span className={`font-bold ${getAccuracyColor(game.accuracy)}`}>
+                      {game.accuracy}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>{game.opening}</span>
+                  <span>{game.timeControl}</span>
+                </div>
+
+                <div className="mt-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950 p-2 rounded">
+                  {game.keyInsight}
                 </div>
               </div>
-            </div>
+            ))}
           </CardContent>
         </Card>
-      )}
-
-      {/* Error Display */}
-      {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-red-700">
-              <span className="text-xl">⚠️</span>
-              <span>{error}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setError(null)}
-                className="ml-auto"
-              >
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Game Upload/Sync Section */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">📂</span>
-            Import Your Games
-          </CardTitle>
-          <CardDescription>
-            Upload PGN files or sync directly from chess platforms
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* PGN Upload */}
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              className="h-20 flex flex-col gap-2"
-              disabled={!isBackendAuthenticated}
-            >
-              <span className="text-2xl">📄</span>
-              <span>Upload PGN File</span>
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pgn"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-
-            {/* Chess.com Sync */}
-            <Button
-              variant="outline"
-              onClick={() => handleSyncButtonClick('chess.com')}
-              className="h-20 flex flex-col gap-2"
-              disabled={!isBackendAuthenticated}
-            >
-              <span className="text-2xl">♟️</span>
-              <span>Sync from Chess.com</span>
-            </Button>
-
-            {/* Lichess Sync */}
-            <Button
-              variant="outline"
-              onClick={() => handleSyncButtonClick('lichess')}
-              className="h-20 flex flex-col gap-2"
-              disabled={!isBackendAuthenticated}
-            >
-              <span className="text-2xl">♞</span>
-              <span>Sync from Lichess</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Active Sync Progress */}
-      {activeSyncJob && (
-        <div className="mb-8">
-          <SyncProgress
-            syncJob={activeSyncJob}
-            onComplete={handleSyncComplete}
-            onError={handleSyncError}
-          />
-        </div>
-      )}
-
-      {/* Main Content Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Games List */}
-        <div>
-          <GameList
-            games={games}
-            selectedGameId={selectedGame}
-            isLoading={isLoading}
-            onGameSelect={handleGameSelect}
-            onLoadMore={hasMoreGames ? handleLoadMoreGames : undefined}
-            hasMore={hasMoreGames}
-          />
-        </div>
 
         {/* Game Analysis */}
-        <div className="space-y-6">
-          {selectedGameData ? (
-            <>
-              {/* Game Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="text-2xl">♟️</span>
-                    Game Analysis
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedGameData.white_player} vs {selectedGameData.black_player}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Platform:</span>
-                      <span className="capitalize">{selectedGameData.platform}</span>
+        <Card className="chess-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-purple-500" />
+              {selectedGame ? `Analysis: vs ${selectedGame.opponent}` : 'Select a Game'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!selectedGame ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Select a game from the list to view detailed analysis</p>
+              </div>
+            ) : analysisLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-muted-foreground">Loading analysis...</p>
+              </div>
+            ) : gameAnalysis ? (
+              <Tabs defaultValue="overview" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="mistakes">Mistakes</TabsTrigger>
+                  <TabsTrigger value="moments">Key Moments</TabsTrigger>
+                  <TabsTrigger value="coach">Coach Notes</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{gameAnalysis.summary.accuracy}%</div>
+                      <div className="text-sm text-muted-foreground">Accuracy</div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Result:</span>
-                      <span>{selectedGameData.result}</span>
+                    <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-600">{gameAnalysis.summary.brilliantMoves}</div>
+                      <div className="text-sm text-muted-foreground">Brilliant Moves</div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Opening:</span>
-                      <span>{selectedGameData.opening}</span>
+                    <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">{gameAnalysis.summary.mistakes}</div>
+                      <div className="text-sm text-muted-foreground">Mistakes</div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Time Control:</span>
-                      <span>{selectedGameData.time_control}</span>
+                    <div className="text-center p-3 bg-red-50 dark:bg-red-950 rounded-lg">
+                      <div className="text-2xl font-bold text-red-600">{gameAnalysis.summary.blunders}</div>
+                      <div className="text-sm text-muted-foreground">Blunders</div>
                     </div>
-                    {(selectedGameData.white_accuracy || selectedGameData.black_accuracy) && (
-                      <div className="flex justify-between">
-                        <span>Accuracy:</span>
-                        <span>
-                          {selectedGameData.white_accuracy && `W: ${Math.round(selectedGameData.white_accuracy)}%`}
-                          {selectedGameData.white_accuracy && selectedGameData.black_accuracy && ' | '}
-                          {selectedGameData.black_accuracy && `B: ${Math.round(selectedGameData.black_accuracy)}%`}
-                        </span>
-                      </div>
-                    )}
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* Chess Board */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Position Analysis</CardTitle>
-                  <CardDescription>
-                    Move {currentMoveIndex} of {getTotalMoves()}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loadingGameAnalysis ? (
-                    <div className="text-center py-8">
-                      <div className="text-2xl mb-2">🔄</div>
-                      <div className="text-gray-600">Loading game analysis...</div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mb-4">
-                        <Chessboard
-                          position={game.fen()}
-                          arePiecesDraggable={false}
-                          boardWidth={350}
-                        />
-                      </div>
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Accuracy Throughout Game</h4>
+                    <Progress value={gameAnalysis.summary.accuracy} className="h-2" />
+                  </div>
+                </TabsContent>
 
-                      {/* Move Navigation */}
-                      <div className="flex justify-center gap-2 mb-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => goToMove(0)}
-                          disabled={currentMoveIndex === 0}
-                        >
-                          ⏮️
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToPreviousMove}
-                          disabled={currentMoveIndex === 0}
-                        >
-                          ⏪
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToNextMove}
-                          disabled={currentMoveIndex >= getTotalMoves()}
-                        >
-                          ⏩
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => goToMove(getTotalMoves())}
-                          disabled={currentMoveIndex >= getTotalMoves()}
-                        >
-                          ⏭️
-                        </Button>
-                      </div>
-
-                      {/* Key Moments */}
-                      {selectedGameData.key_moments && parseKeyMoments(selectedGameData.key_moments).length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-2">Key Moments</h4>
-                          <div className="space-y-2 max-h-40 overflow-y-auto">
-                            {parseKeyMoments(selectedGameData.key_moments).map((moment: any, index: number) => (
-                              <div key={index} className="p-2 bg-gray-50 rounded text-sm">
-                                <div className="font-medium">Move {moment.move_number || index + 1}</div>
-                                <div className="text-gray-600">{moment.analysis || moment.description || 'Critical position'}</div>
-                              </div>
-                            ))}
-                          </div>
+                <TabsContent value="mistakes" className="space-y-3">
+                  {gameAnalysis.moves
+                    .filter(move => move.accuracy === 'mistake' || move.accuracy === 'blunder')
+                    .map((move, index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono font-bold">{move.move}</span>
+                          <Badge variant={move.accuracy === 'blunder' ? 'destructive' : 'secondary'}>
+                            {move.accuracy}
+                          </Badge>
                         </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <div className="text-2xl mb-4">🎯</div>
-                <h3 className="text-xl font-medium mb-2">Select a Game to Analyze</h3>
-                <p className="text-muted-foreground">
-                  Choose a game from your collection to view detailed analysis and key moments
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+                        {move.comment && (
+                          <p className="text-sm text-muted-foreground">{move.comment}</p>
+                        )}
+                      </div>
+                    ))}
+                </TabsContent>
 
-      {/* Sync Modal */}
-      <SyncModal
-        isOpen={syncModal.isOpen}
-        platform={syncModal.platform}
-        onClose={() => setSyncModal({ isOpen: false, platform: null })}
-        onStartSync={handleStartSync}
-      />
+                <TabsContent value="moments" className="space-y-3">
+                  {gameAnalysis.criticalMoments.map((moment, index) => (
+                    <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
+                      {getMomentIcon(moment.type)}
+                      <div>
+                        <div className="font-medium">Move {moment.moveNumber}</div>
+                        <p className="text-sm text-muted-foreground">{moment.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </TabsContent>
+
+                <TabsContent value="coach" className="space-y-4">
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        C
+                      </div>
+                      Coach Analysis
+                    </h4>
+                    <p className="text-sm leading-relaxed">{gameAnalysis.coachNotes}</p>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
-} 
+}

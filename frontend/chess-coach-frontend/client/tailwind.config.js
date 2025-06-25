@@ -51,6 +51,15 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Rookify Brand Colors
+        rookify: {
+          navy: "hsl(var(--rookify-navy))",
+          gold: "hsl(var(--rookify-gold))",
+          green: "hsl(var(--rookify-green))",
+          purple: "hsl(var(--rookify-purple))",
+          red: "hsl(var(--rookify-red))",
+          slate: "hsl(var(--rookify-slate))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

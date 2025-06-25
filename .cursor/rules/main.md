@@ -11,7 +11,7 @@ Rookify is a chess coaching platform with microservices architecture designed to
 - **Deployment**: Docker Compose with containerized services
 
 ## File Organization
-- `/frontend/chess-coach-frontend/` - React application
+- `/frontend/chess-coach-frontend/client/` - React + TypeScript application (Vite)
 - `/backend/` - Python FastAPI backend + Node.js routes
 - `/ai-engine/` - Flask chess analysis service
 - `/backend/src/` - Node.js Express server

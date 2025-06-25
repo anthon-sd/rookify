@@ -1,346 +1,165 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/contexts/AuthContext'
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react"
+import { getProfileData } from "@/api/profile"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { User, TrendingUp, Trophy, Target, BarChart3, Star, Lock, CheckCircle } from "lucide-react"
+import { useToast } from "@/hooks/useToast"
+// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-interface UserProfile {
-  gamesPlayed: number
-  winRate: number
-  averageAccuracy: number
-  favoriteOpening: string
-  strongestPhase: string
-  weakestPhase: string
-  ratingHistory: Array<{ date: string; rating: number }>
-  achievements: Array<{ 
+interface ProfileData {
+  user: {
     id: string
-    title: string
+    username: string
+    email: string
+    rating: number
+    ratingHistory: Array<{ date: string, rating: number }>
+    playstyle: string
+    joinDate: string
+    totalGames: number
+    lessonsCompleted: number
+  }
+  skillTree: Array<{
+    category: string
+    skills: Array<{
+      name: string
+      level: number
+      maxLevel: number
+      isUnlocked: boolean
+    }>
+  }>
+  statistics: {
+    accuracy: number
+    averageAccuracy: number
+    strongestSkills: string[]
+    improvementAreas: Array<{ skill: string, successRate: number, recommendation: string }>
+  }
+  achievements: Array<{
+    id: string
+    name: string
     description: string
-    dateEarned: string
+    isUnlocked: boolean
+    unlockedDate?: string
     icon: string
   }>
-  gameStats: {
-    wins: number
-    losses: number
-    draws: number
-    totalTime: string
-  }
-  tacticalStats: {
-    puzzlesSolved: number
-    accuracy: number
-    averageRating: number
-    favoriteTheme: string
-  }
 }
 
 export function Profile() {
-  const { user } = useAuth()
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [profileData, setProfileData] = useState<ProfileData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
-  // Mock data - in production this would be fetched from API
   useEffect(() => {
-    if (user) {
-      setLoading(true)
-      setTimeout(() => {
-        setProfile({
-          gamesPlayed: Math.floor(Math.random() * 200) + 50,
-          winRate: Math.floor(Math.random() * 30) + 55,
-          averageAccuracy: Math.floor(Math.random() * 20) + 75,
-          favoriteOpening: "Sicilian Defense",
-          strongestPhase: "Middle Game",
-          weakestPhase: "Endgame",
-          ratingHistory: [
-            { date: "2024-01-01", rating: 1180 },
-            { date: "2024-01-15", rating: 1220 },
-            { date: "2024-02-01", rating: 1195 },
-            { date: "2024-02-15", rating: 1245 },
-            { date: "2024-03-01", rating: user.rating || 1200 },
-          ],
-          achievements: [
-            {
-              id: "1",
-              title: "First Victory",
-              description: "Won your first game",
-              dateEarned: "2024-01-05",
-              icon: "🏆"
-            },
-            {
-              id: "2", 
-              title: "Puzzle Master",
-              description: "Solved 100 tactical puzzles",
-              dateEarned: "2024-01-20",
-              icon: "🧩"
-            },
-            {
-              id: "3",
-              title: "Rating Climber",
-              description: "Increased rating by 50 points",
-              dateEarned: "2024-02-10",
-              icon: "📈"
-            }
-          ],
-          gameStats: {
-            wins: Math.floor(Math.random() * 80) + 30,
-            losses: Math.floor(Math.random() * 60) + 20,
-            draws: Math.floor(Math.random() * 20) + 5,
-            totalTime: "48h 32m"
-          },
-          tacticalStats: {
-            puzzlesSolved: Math.floor(Math.random() * 300) + 100,
-            accuracy: Math.floor(Math.random() * 25) + 70,
-            averageRating: Math.floor(Math.random() * 200) + 1400,
-            favoriteTheme: "Pin"
-          }
+    const fetchProfileData = async () => {
+      try {
+        const data = await getProfileData() as ProfileData
+        setProfileData(data)
+      } catch (error) {
+        console.error('Error fetching profile data:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load profile data",
+          variant: "destructive",
         })
+      } finally {
         setLoading(false)
-      }, 1000)
+      }
     }
-  }, [user])
 
-  const getRatingTrend = () => {
-    if (!profile?.ratingHistory || profile.ratingHistory.length < 2) return "stable"
-    const latest = profile.ratingHistory[profile.ratingHistory.length - 1].rating
-    const previous = profile.ratingHistory[profile.ratingHistory.length - 2].rating
-    return latest > previous ? "up" : latest < previous ? "down" : "stable"
+    fetchProfileData()
+  }, [toast])
+
+  const getSkillColor = (level: number, maxLevel: number) => {
+    const percentage = (level / maxLevel) * 100
+    if (percentage === 0) return "bg-gray-200"
+    if (percentage <= 25) return "bg-red-400"
+    if (percentage <= 50) return "bg-yellow-400"
+    if (percentage <= 75) return "bg-blue-400"
+    return "bg-green-400"
   }
 
-  const getTrendEmoji = (trend: string) => {
-    switch (trend) {
-      case "up": return "📈"
-      case "down": return "📉"
-      default: return "➡️"
-    }
-  }
-
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case "up": return "text-green-600"
-      case "down": return "text-red-600"
-      default: return "text-gray-600"
-    }
-  }
-
-  if (!user) {
+  if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Please log in to view your profile</h1>
-        </div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (!profileData) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Unable to load profile data</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-          Skill Profile
-        </h1>
-        <p className="text-xl text-muted-foreground">
-          Track your chess improvement and performance metrics
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Profile Header */}
+      <Card className="chess-card">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-6">
+            <Avatar className="w-24 h-24 mx-auto md:mx-0">
+              <AvatarImage src="/avatar.jpg" />
+              <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
+                {profileData.user.username.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
 
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="text-2xl">📊 Loading your profile...</div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* User Info & Quick Stats */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">👤</span>
-                  Player Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <div className="flex-1 text-center md:text-left space-y-2">
+              <h1 className="text-2xl font-bold">{profileData.user.username}</h1>
+              <p className="text-muted-foreground">{profileData.user.email}</p>
+
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                  {profileData.user.rating} Rating
+                </Badge>
+                <Badge variant="outline">{profileData.user.playstyle}</Badge>
+                <Badge variant="secondary">
+                  Member since {new Date(profileData.user.joinDate).getFullYear()}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="text-center space-y-4">
+              <Button className="chess-button">
+                <User className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Button>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="text-center">
-                  <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
-                    {(user.username || user.email)[0].toUpperCase()}
-                  </div>
-                  <h3 className="text-xl font-semibold">{user.username || "Player"}</h3>
-                  <p className="text-muted-foreground">{user.email}</p>
+                  <div className="font-bold text-blue-600">{profileData.user.totalGames}</div>
+                  <div className="text-muted-foreground">Games Played</div>
                 </div>
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span>Current Rating:</span>
-                    <span className="font-semibold">{user.rating || 1200}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Play Style:</span>
-                    <span className="font-semibold">{user.playstyle || "Balanced"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Member Since:</span>
-                    <span className="font-semibold">Jan 2024</span>
-                  </div>
+                <div className="text-center">
+                  <div className="font-bold text-purple-600">{profileData.user.lessonsCompleted}</div>
+                  <div className="text-muted-foreground">Lessons Done</div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">📊</span>
-                  Performance Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-3xl font-bold text-blue-600">{profile?.gamesPlayed || 0}</div>
-                    <div className="text-sm text-muted-foreground">Games Played</div>
-                  </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-3xl font-bold text-green-600">{profile?.winRate || 0}%</div>
-                    <div className="text-sm text-muted-foreground">Win Rate</div>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-3xl font-bold text-purple-600">{profile?.averageAccuracy || 0}%</div>
-                    <div className="text-sm text-muted-foreground">Avg. Accuracy</div>
-                  </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className={`text-3xl font-bold ${getTrendColor(getRatingTrend())}`}>
-                      {getTrendEmoji(getRatingTrend())}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Rating Trend</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Game Statistics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">🎮</span>
-                  Game Statistics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <span className="text-green-600 text-xl">🏆</span>
-                      Wins
-                    </span>
-                    <span className="font-bold text-green-600">{profile?.gameStats.wins || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <span className="text-red-600 text-xl">❌</span>
-                      Losses
-                    </span>
-                    <span className="font-bold text-red-600">{profile?.gameStats.losses || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <span className="text-yellow-600 text-xl">🤝</span>
-                      Draws
-                    </span>
-                    <span className="font-bold text-yellow-600">{profile?.gameStats.draws || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <span className="text-blue-600 text-xl">⏱️</span>
-                      Total Play Time
-                    </span>
-                    <span className="font-bold text-blue-600">{profile?.gameStats.totalTime || "0h 0m"}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      <Tabs defaultValue="performance" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
+          <TabsTrigger value="achievements">Achievements</TabsTrigger>
+          <TabsTrigger value="improvement">Improvement</TabsTrigger>
+        </TabsList>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">🧩</span>
-                  Tactical Training
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <span>Puzzles Solved</span>
-                    <span className="font-bold text-purple-600">{profile?.tacticalStats.puzzlesSolved || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <span>Accuracy</span>
-                    <span className="font-bold text-green-600">{profile?.tacticalStats.accuracy || 0}%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                    <span>Average Rating</span>
-                    <span className="font-bold text-blue-600">{profile?.tacticalStats.averageRating || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                    <span>Favorite Theme</span>
-                    <span className="font-bold text-orange-600">{profile?.tacticalStats.favoriteTheme || "N/A"}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Strengths & Weaknesses */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">💪</span>
-                  Strengths & Areas for Improvement
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <h4 className="font-semibold text-green-800 mb-2">🔥 Strongest Phase</h4>
-                  <p className="text-green-700">{profile?.strongestPhase || "Middle Game"}</p>
-                </div>
-                <div className="p-4 bg-yellow-50 rounded-lg">
-                  <h4 className="font-semibold text-yellow-800 mb-2">📚 Focus Area</h4>
-                  <p className="text-yellow-700">{profile?.weakestPhase || "Endgame"}</p>
-                </div>
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-800 mb-2">♟️ Favorite Opening</h4>
-                  <p className="text-blue-700">{profile?.favoriteOpening || "Italian Game"}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">🏅</span>
-                  Recent Achievements
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {profile?.achievements.map((achievement) => (
-                    <div key={achievement.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <span className="text-2xl">{achievement.icon}</span>
-                      <div className="flex-1">
-                        <h4 className="font-semibold">{achievement.title}</h4>
-                        <p className="text-sm text-muted-foreground">{achievement.description}</p>
-                        <p className="text-xs text-muted-foreground">Earned on {achievement.dateEarned}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Rating History */}
-          <Card>
+        <TabsContent value="performance" className="space-y-6">
+          {/* Rating Chart */}
+          <Card className="chess-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">📈</span>
+                <TrendingUp className="h-5 w-5 text-green-500" />
                 Rating Progress
               </CardTitle>
               <CardDescription>
@@ -348,23 +167,193 @@ export function Profile() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                  {profile?.ratingHistory.map((entry, index) => (
-                    <div key={index} className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-lg font-bold">{entry.rating}</div>
-                      <div className="text-xs text-muted-foreground">{entry.date}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-center">
-                  <Button variant="outline">View Detailed History</Button>
+              <div className="h-64 flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg">
+                <div className="text-center text-muted-foreground">
+                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Rating chart - to be implemented with recharts</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+
+          {/* Performance Stats */}
+          <div className="grid md:grid-cols-3 gap-4">
+            <Card className="chess-card">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-green-600 mb-2">
+                  {profileData.statistics.accuracy}%
+                </div>
+                <div className="text-sm text-muted-foreground mb-2">Current Accuracy</div>
+                <div className="text-xs text-green-600">
+                  +{profileData.statistics.accuracy - profileData.statistics.averageAccuracy}% above average
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="chess-card">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {profileData.user.rating}
+                </div>
+                <div className="text-sm text-muted-foreground mb-2">Peak Rating</div>
+                <div className="text-xs text-blue-600">
+                  +{Math.max(...profileData.user.ratingHistory.map(h => h.rating)) - Math.min(...profileData.user.ratingHistory.map(h => h.rating))} total gain
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="chess-card">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-purple-600 mb-2">
+                  {profileData.statistics.strongestSkills.length}
+                </div>
+                <div className="text-sm text-muted-foreground mb-2">Mastered Skills</div>
+                <div className="text-xs text-purple-600">
+                  Top strengths identified
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="skills" className="space-y-6">
+          {/* Skill Tree */}
+          {profileData.skillTree.map((category) => (
+            <Card key={category.category} className="chess-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-blue-500" />
+                  {category.category}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {category.skills.map((skill) => (
+                    <div key={skill.name} className={`p-4 rounded-lg border ${
+                      skill.isUnlocked ? 'border-gray-200' : 'border-gray-100 opacity-60'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {skill.isUnlocked ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Lock className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="font-medium">{skill.name}</span>
+                        </div>
+                        <Badge variant="outline">
+                          {skill.level}/{skill.maxLevel}
+                        </Badge>
+                      </div>
+                      <Progress
+                        value={(skill.level / skill.maxLevel) * 100}
+                        className="h-2"
+                      />
+                      <div className="flex justify-between mt-1">
+                        {Array.from({ length: skill.maxLevel }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-3 h-3 rounded-full ${
+                              i < skill.level ? getSkillColor(skill.level, skill.maxLevel) : 'bg-gray-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="achievements" className="space-y-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {profileData.achievements.map((achievement) => (
+              <Card key={achievement.id} className={`chess-card ${
+                achievement.isUnlocked
+                  ? 'border-yellow-200 bg-yellow-50 dark:bg-yellow-950'
+                  : 'opacity-60'
+              }`}>
+                <CardContent className="p-6 text-center">
+                  <div className="text-4xl mb-3">{achievement.icon}</div>
+                  <h3 className="font-semibold mb-2">{achievement.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {achievement.description}
+                  </p>
+                  {achievement.isUnlocked ? (
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                      <Trophy className="h-3 w-3 mr-1" />
+                      Unlocked {achievement.unlockedDate && new Date(achievement.unlockedDate).toLocaleDateString()}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Locked
+                    </Badge>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="improvement" className="space-y-6">
+          {/* Strongest Skills */}
+          <Card className="chess-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                Your Strongest Skills
+              </CardTitle>
+              <CardDescription>
+                Areas where you excel compared to players at your level
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-3 gap-4">
+                {profileData.statistics.strongestSkills.map((skill, index) => (
+                  <div key={skill} className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                    <div className="text-2xl mb-2">
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                    </div>
+                    <div className="font-medium">{skill}</div>
+                    <div className="text-sm text-muted-foreground">#{index + 1} Strength</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Improvement Areas */}
+          <Card className="chess-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-blue-500" />
+                Areas for Improvement
+              </CardTitle>
+              <CardDescription>
+                Targeted recommendations to boost your performance
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {profileData.statistics.improvementAreas.map((area) => (
+                <div key={area.skill} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium">{area.skill}</h4>
+                    <Badge variant="outline">{area.successRate}% success rate</Badge>
+                  </div>
+                  <Progress value={area.successRate} className="h-2 mb-2" />
+                  <p className="text-sm text-muted-foreground">{area.recommendation}</p>
+                  <Button size="sm" variant="outline" className="mt-2">
+                    Start Practice
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
-} 
+}
