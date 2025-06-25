@@ -1,12 +1,12 @@
 services:
   frontend:
     build:
-      context: ./frontend/chess-coach-frontend
+      context: ./frontend/chess-coach-frontend/client
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=${REACT_APP_API_URL}
-        - REACT_APP_SUPABASE_URL=${SUPABASE_URL}
-        - REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+        - VITE_REACT_APP_SUPABASE_URL=${SUPABASE_URL}
+        - VITE_REACT_APP_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     ports:
       - "3000:80"
     networks:
