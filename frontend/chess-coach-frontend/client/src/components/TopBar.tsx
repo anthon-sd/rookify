@@ -31,7 +31,7 @@ export function TopBar() {
           <ThemeToggle />
           
           <Avatar className="h-8 w-8">
-            <AvatarImage src="/avatar.jpg" />
+                            <AvatarImage src="/placeholder-avatar.svg" alt="User Avatar" />
             <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
               {user?.email?.charAt(0).toUpperCase() || 'U'}
             </AvatarFallback>

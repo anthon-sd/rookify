@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, Star } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
+import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 
 interface Game {
   id: string
@@ -35,25 +36,30 @@ export function Analyze() {
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    const fetchGames = async () => {
-      try {
-        const data = await getGames() as { games: Game[] }
-        setGames(data.games)
-      } catch (error) {
-        console.error('Error fetching games:', error)
-        toast({
-          title: "Error",
-          description: "Failed to load games",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+  const fetchGames = async () => {
+    try {
+      const data = await getGames() as { games: Game[] }
+      setGames(data.games)
+    } catch (error) {
+      console.error('Error fetching games:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load games",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchGames()
   }, [toast])
+
+  const handleSyncComplete = () => {
+    // Refresh games list when sync completes
+    fetchGames()
+  }
 
   const handleGameSelect = async (game: Game) => {
     setSelectedGame(game)
@@ -144,10 +150,15 @@ export function Analyze() {
             <Upload className="h-4 w-4" />
             Import PGN
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
-            <ExternalLink className="h-4 w-4" />
-            Connect Chess.com
-          </Button>
+          <SyncGamesDialog 
+            onSyncComplete={handleSyncComplete}
+            trigger={
+              <Button variant="outline" className="flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Sync Games
+              </Button>
+            }
+          />
         </div>
       </div>
 

@@ -7,7 +7,8 @@ import { backendApi } from './api';
 export const getGames = async (limit = 20, offset = 0, platform?: string) => {
   console.log('Fetching games...');
   try {
-    const games = await backendApi.getGames(limit, offset, platform);
+    const gamesResponse = await backendApi.getGames(limit, offset, platform);
+    const games = Array.isArray(gamesResponse) ? gamesResponse : [];
     // Transform the backend response to match the expected frontend format
     return {
       games: games.map(game => ({
@@ -43,9 +44,10 @@ export const getGameAnalysis = async (gameId: string) => {
     let keyMoments = [];
     if (gameData.key_moments) {
       try {
-        keyMoments = typeof gameData.key_moments === 'string' 
+        const parsedMoments = typeof gameData.key_moments === 'string' 
           ? JSON.parse(gameData.key_moments)
           : gameData.key_moments;
+        keyMoments = Array.isArray(parsedMoments) ? parsedMoments : [];
       } catch (e) {
         console.warn('Failed to parse key moments:', e);
         keyMoments = [];

@@ -104,7 +104,7 @@ export function Profile() {
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             <Avatar className="w-24 h-24 mx-auto md:mx-0">
-              <AvatarImage src="/avatar.jpg" />
+              <AvatarImage src="/placeholder-avatar.svg" alt="Profile Avatar" />
               <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
                 {profileData.user.username.charAt(0).toUpperCase()}
               </AvatarFallback>

@@ -127,7 +127,7 @@ export const getPracticeExercises = async () => {
 
 // Description: Get specific exercise content
 export const getExerciseContent = async (exerciseId: string) => {
-  console.log(`Fetching exercise content for ${exerciseId}...`);
+  // console.log(`Fetching exercise content for ${exerciseId}...`);
   try {
     // This would normally fetch specific exercise content from the backend
     // For now, return a sample exercise structure

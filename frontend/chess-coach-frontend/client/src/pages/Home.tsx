@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, Clock, Target, BookOpen, Trophy, ChevronRight, Zap, Star } from "lucide-react"
+import { TrendingUp, TrendingDown, Clock, Target, BookOpen, Trophy, ChevronRight, Zap, Star, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
+import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 
 interface DashboardData {
   greeting: string
@@ -120,22 +121,43 @@ export function Home() {
             </div>
           </div>
           
-          <Card className="rookify-card border-2 border-amber-400">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-amber-500" />
-                Daily Challenge
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <h3 className="font-semibold">{dashboardData.dailyChallenge.title}</h3>
-              <p className="text-sm text-muted-foreground">{dashboardData.dailyChallenge.theme}</p>
-              <Badge variant="outline" className="border-amber-400 text-amber-600">{dashboardData.dailyChallenge.difficulty}</Badge>
-              <Button className="w-full rookify-button-gold mt-3">
-                Start Challenge
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card className="rookify-card border-2 border-amber-400">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-amber-500" />
+                  Daily Challenge
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <h3 className="font-semibold">{dashboardData.dailyChallenge.title}</h3>
+                <p className="text-sm text-muted-foreground">{dashboardData.dailyChallenge.theme}</p>
+                <Badge variant="outline" className="border-amber-400 text-amber-600">{dashboardData.dailyChallenge.difficulty}</Badge>
+                <Button className="w-full rookify-button-gold mt-3">
+                  Start Challenge
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="rookify-card border-2 border-blue-400">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ExternalLink className="h-5 w-5 text-blue-500" />
+                  Sync Your Games
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">Import and analyze games from Chess.com or Lichess</p>
+                <SyncGamesDialog 
+                  trigger={
+                    <Button className="w-full rookify-button-primary mt-3">
+                      Sync Games
+                    </Button>
+                  }
+                />
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
 

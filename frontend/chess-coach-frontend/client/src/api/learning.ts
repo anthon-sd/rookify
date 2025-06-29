@@ -106,7 +106,7 @@ export const getLearningContent = async () => {
 
 // Description: Get specific lesson content
 export const getLessonContent = async (lessonId: string) => {
-  console.log(`Fetching lesson content for ${lessonId}...`);
+  // console.log(`Fetching lesson content for ${lessonId}...`);
   try {
     // This would normally fetch lesson content from the backend
     // For now, return a structured lesson template

@@ -86,22 +86,23 @@ class BackendAPI {
   async loginUser(email: string, password: string): Promise<LoginResponse> {
     console.log('🔐 Attempting login for:', email)
     
-    // Backend expects FormData for OAuth2PasswordRequestForm
-    const formData = new FormData()
-    formData.append('username', email)  // Backend uses 'username' field for email
-    formData.append('password', password)
+    try {
+      // Backend expects FormData for OAuth2PasswordRequestForm
+      const formData = new FormData()
+      formData.append('username', email)  // Backend uses 'username' field for email
+      formData.append('password', password)
 
-    const response = await fetch(`${API_BASE_URL}/token`, {
-      method: 'POST',
-      body: formData,  // Send FormData, not JSON
-    })
+      const response = await fetch(`${API_BASE_URL}/token`, {
+        method: 'POST',
+        body: formData,  // Send FormData, not JSON
+      })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || 'Login failed')
-    }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Login failed')
+      }
 
-    const tokenData = await response.json()
+      const tokenData = await response.json()
     
     // Get user info after successful login
     const userResponse = await fetch(`${API_BASE_URL}/users/me`, {
@@ -125,8 +126,15 @@ class BackendAPI {
     localStorage.setItem('authToken', tokenData.access_token)
     localStorage.setItem('userData', JSON.stringify(user))
 
-    console.log('✅ Login successful for user:', user.email)
-    return { token: tokenData.access_token, user }
+      console.log('✅ Login successful for user:', user.email)
+      return { token: tokenData.access_token, user }
+    } catch (error: any) {
+      // Handle network errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Unable to connect to server. Please ensure the backend is running.')
+      }
+      throw error
+    }
   }
 
   async registerUser(userData: RegisterData): Promise<any> {
@@ -163,20 +171,28 @@ class BackendAPI {
   }
 
   async authenticatedRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        ...this.getAuthHeaders(),
-        ...options.headers,
-      },
-    })
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          ...this.getAuthHeaders(),
+          ...options.headers,
+        },
+      })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `API request failed: ${response.statusText}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `API request failed: ${response.statusText}`)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      // Handle network errors (like ERR_CONNECTION_REFUSED)
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Unable to connect to server. Please ensure the backend is running.')
+      }
+      throw error
     }
-
-    return response.json()
   }
 
   /**
@@ -285,7 +301,13 @@ class BackendAPI {
       params.append('platform', platform)
     }
 
-    return this.authenticatedRequest(`/games/${this.user.id}?${params}`)
+    try {
+      const result = await this.authenticatedRequest(`/games/${this.user.id}?${params}`)
+      return Array.isArray(result) ? result : []
+    } catch (error: any) {
+      console.error('Error fetching games:', error)
+      return [] // Return empty array on error
+    }
   }
 
   /**
