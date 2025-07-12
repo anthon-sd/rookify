@@ -424,51 +424,96 @@ async def sync_platform_games(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Sync games from chess platform for analysis.
-    Returns immediately and processes in background.
+    Sync games from Chess.com or Lichess for a user.
+    Requires user to have set their chess platform username in profile.
     """
-    # Debug: Log what we received from frontend
-    print(f"🔍 SYNC DEBUG: Received request - platform: {request.platform}, username: {request.username}")
-    print(f"🔍 SYNC DEBUG: Date params - fromDate: '{request.fromDate}', toDate: '{request.toDate}', months: {request.months}")
-    
-    # Verify user owns this account
-    if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    
-    # Check rate limit for sync jobs
-    if not await check_sync_rate_limit(user_id):
-        raise HTTPException(
-            status_code=429, 
-            detail="Too many sync requests. Please wait before starting another sync."
-        )
-    
-    # Validate platform
-    if request.platform not in ["chess.com", "lichess"]:
-        raise HTTPException(status_code=400, detail="Platform must be 'chess.com' or 'lichess'")
-    
-    # Create sync job record using SyncJobManager for compliance
     try:
-        sync_job = sync_job_manager.create_sync_job(
-            user_id=user_id,
-            platform=request.platform,
-            username=request.username,
-            months_requested=request.months
-        )
+        print(f"🎮 Starting sync for user {user_id} from {request.platform}")
         
-        # Queue background task
-        background_tasks.add_task(
-            process_sync_job,
-            sync_job['id'],
-            user_id,
-            request
-        )
+        # Verify user can sync for this user_id
+        if current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get user's chess platform usernames
+        user_data = supabase.table('users').select(
+            'chess_com_username, lichess_username'
+        ).eq('id', user_id).execute()
+        
+        if not user_data.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_chess_usernames = user_data.data[0]
+        chess_com_username = user_chess_usernames.get('chess_com_username')
+        lichess_username = user_chess_usernames.get('lichess_username')
+        
+        # Validate that user has set the required platform username
+        if request.platform == 'chess.com':
+            if not chess_com_username:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Please set your Chess.com username in your profile before syncing games"
+                )
+            # Use the username from profile, not from request
+            request.username = chess_com_username
+        elif request.platform == 'lichess':
+            if not lichess_username:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Please set your Lichess username in your profile before syncing games"
+                )
+            # Use the username from profile, not from request
+            request.username = lichess_username
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported platform")
+        
+        print(f"✅ Using platform username: {request.username} for {request.platform}")
+        
+        # Check if there's already a sync job running for this user and platform
+        existing_jobs = supabase.table('sync_jobs').select('*').eq(
+            'user_id', user_id
+        ).eq('platform', request.platform).in_(
+            'status', ['pending', 'fetching', 'analyzing']
+        ).execute()
+        
+        if existing_jobs.data:
+            raise HTTPException(
+                status_code=409, 
+                detail=f"A sync job is already running for {request.platform}. Please wait for it to complete."
+            )
+        
+        # Create sync job record
+        sync_job = {
+            'user_id': user_id,
+            'platform': request.platform,
+            'username': request.username,
+            'months_requested': request.months,
+            'status': 'pending',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }
+        
+        job_result = supabase.table('sync_jobs').insert(sync_job).execute()
+        
+        if not job_result.data:
+            raise HTTPException(status_code=500, detail="Failed to create sync job")
+        
+        sync_job_id = job_result.data[0]['id']
+        print(f"📝 Created sync job: {sync_job_id}")
+        
+        # Start background task
+        background_tasks.add_task(process_sync_job, sync_job_id, user_id, request)
         
         return {
-            'sync_job_id': sync_job['id'],
-            'status': 'started',
-            'message': f'Syncing games from {request.platform}...'
+            "message": f"Sync started for {request.platform}",
+            "sync_job_id": sync_job_id,
+            "platform": request.platform,
+            "username": request.username,
+            "status": "pending"
         }
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"💥 Error starting sync: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to start sync: {str(e)}")
 
 async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest):
@@ -845,9 +890,26 @@ async def get_user_games(
             print(f"❌ Access denied: {current_user.id} != {user_id}")
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Build query - only select columns that exist
+        # Get user's chess platform usernames for opponent determination
+        user_data = supabase.table('users').select(
+            'chess_com_username, lichess_username'
+        ).eq('id', user_id).execute()
+        
+        if not user_data.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_chess_usernames = user_data.data[0]
+        chess_com_username = user_chess_usernames.get('chess_com_username')
+        lichess_username = user_chess_usernames.get('lichess_username')
+        
+        print(f"🔍 User chess usernames - Chess.com: {chess_com_username}, Lichess: {lichess_username}")
+        
+        # Build query - select all columns needed for frontend
         query = supabase.table('game_analysis').select(
-            "id, user_id, game_url, platform, pgn, key_moments"
+            "id, user_id, game_url, platform, pgn, key_moments, "
+            "white_username, black_username, white_rating, black_rating, "
+            "user_color, result, time_control, game_timestamp, "
+            "opening_name, eco_code, analysis, avg_accuracy"
         ).eq('user_id', user_id)
         
         # Add platform filter if specified
@@ -877,15 +939,91 @@ async def get_user_games(
         count_result = count_response.execute()
         total = len(count_result.data) if count_result.data else 0
         
-        print(f"✅ Returning {len(response.data)} games (total: {total})")
+        # Transform database data to match frontend expectations
+        transformed_games = []
+        for game in response.data:
+            white_username = game.get('white_username', 'Unknown')
+            black_username = game.get('black_username', 'Unknown')
+            game_platform = game.get('platform', '')
+            
+            # Determine if user is white or black based on their chess platform username
+            user_is_white = False
+            user_is_black = False
+            
+            if game_platform == 'chess.com' and chess_com_username:
+                user_is_white = white_username.lower() == chess_com_username.lower()
+                user_is_black = black_username.lower() == chess_com_username.lower()
+            elif game_platform == 'lichess' and lichess_username:
+                user_is_white = white_username.lower() == lichess_username.lower()
+                user_is_black = black_username.lower() == lichess_username.lower()
+            else:
+                # Fallback to user_color field if available
+                user_color = game.get('user_color')
+                if user_color == 'white':
+                    user_is_white = True
+                elif user_color == 'black':
+                    user_is_black = True
+            
+            # Determine opponent and user result
+            if user_is_white:
+                opponent = black_username
+                user_accuracy = game.get('avg_accuracy', 0)
+                # Transform result to user perspective (user played white)
+                game_result = game.get('result', '')
+                if game_result == '1-0':
+                    user_result = 'win'
+                elif game_result == '0-1':
+                    user_result = 'loss'
+                elif game_result == '1/2-1/2':
+                    user_result = 'draw'
+                else:
+                    user_result = 'unknown'
+            elif user_is_black:
+                opponent = white_username
+                user_accuracy = game.get('avg_accuracy', 0)
+                # Transform result to user perspective (user played black)
+                game_result = game.get('result', '')
+                if game_result == '0-1':
+                    user_result = 'win'
+                elif game_result == '1-0':
+                    user_result = 'loss'
+                elif game_result == '1/2-1/2':
+                    user_result = 'draw'
+                else:
+                    user_result = 'unknown'
+            else:
+                # Cannot determine user color - this indicates missing chess platform username
+                opponent = 'Unknown'
+                user_accuracy = game.get('avg_accuracy', 0)
+                user_result = 'unknown'
+                print(f"⚠️ Cannot determine user color for game {game.get('id')} - missing chess platform username")
+            
+            print(f"🎯 Game {game.get('id')}: White={white_username}, Black={black_username}, User={user_is_white and 'white' or user_is_black and 'black' or 'unknown'}, Opponent={opponent}")
+            
+            transformed_game = {
+                "id": game.get('id'),
+                "white_player": white_username,
+                "black_player": black_username,
+                "opponent": opponent,  # Add explicit opponent field
+                "result": game.get('result', ''),
+                "user_result": user_result,  # Add user-perspective result
+                "time_control": game.get('time_control', 'Unknown'),
+                "opening": game.get('opening_name', 'Unknown Opening'),
+                "pgn": game.get('pgn', ''),
+                "key_moments": game.get('key_moments'),
+                "analysis_summary": game.get('analysis', ''),
+                "white_accuracy": user_accuracy if user_is_white else None,
+                "black_accuracy": user_accuracy if user_is_black else None,
+                "user_accuracy": user_accuracy,  # Add direct user accuracy field
+                "played_at": game.get('game_timestamp', ''),
+                "platform": game_platform,
+                "game_id": game.get('game_url', '').split('/')[-1] if game.get('game_url') else game.get('id')
+            }
+            transformed_games.append(transformed_game)
         
-        return {
-            "games": response.data,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "has_more": offset + limit < total
-        }
+        print(f"✅ Returning {len(transformed_games)} games (total: {total})")
+        
+        return transformed_games
         
     except HTTPException:
         raise
@@ -1303,6 +1441,38 @@ async def run_vector_db_sync(user_id: Optional[str] = None, limit: Optional[int]
         
     except Exception as e:
         print(f"❌ Vector DB sync failed: {e}")
+
+@app.get("/migrate/add-chess-usernames")
+async def migrate_add_chess_usernames():
+    """Apply migration to add chess platform username fields to users table"""
+    try:
+        # Check if columns already exist by querying the table structure
+        try:
+            # Try to select the columns - if they exist, this won't fail
+            test_query = supabase.table('users').select('chess_com_username, lichess_username').limit(1).execute()
+            return {"message": "Columns already exist", "status": "success"}
+        except Exception:
+            # Columns don't exist, we need to add them
+            pass
+        
+        # Since we can't execute raw DDL through Supabase client, 
+        # let's manually update the schema by creating a dummy record with the new fields
+        # This will fail gracefully if columns don't exist
+        
+        return {
+            "message": "Migration needs to be applied manually", 
+            "status": "manual_required",
+            "instructions": [
+                "Execute these SQL commands in your Supabase SQL editor:",
+                "ALTER TABLE users ADD COLUMN chess_com_username VARCHAR;",
+                "ALTER TABLE users ADD COLUMN lichess_username VARCHAR;",
+                "CREATE INDEX idx_users_chess_com_username ON users(chess_com_username);",
+                "CREATE INDEX idx_users_lichess_username ON users(lichess_username);"
+            ]
+        }
+        
+    except Exception as e:
+        return {"error": f"Migration check failed: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

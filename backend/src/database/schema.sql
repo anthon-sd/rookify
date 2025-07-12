@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR NOT NULL UNIQUE,
     rating INTEGER DEFAULT 1200,
     playstyle VARCHAR,
+    chess_com_username VARCHAR,
+    lichess_username VARCHAR,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 

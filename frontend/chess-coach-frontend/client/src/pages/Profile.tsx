@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react"
-import { getProfileData } from "@/api/profile"
+import { getProfileData, updateProfile } from "@/api/profile"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { User, TrendingUp, Trophy, Target, BarChart3, Star, Lock, CheckCircle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { TrendingUp, Trophy, Target, BarChart3, Star, Lock, CheckCircle, Edit, Save, X } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
 // import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -18,6 +21,8 @@ interface ProfileData {
     rating: number
     ratingHistory: Array<{ date: string, rating: number }>
     playstyle: string
+    chess_com_username?: string
+    lichess_username?: string
     joinDate: string
     totalGames: number
     lessonsCompleted: number
@@ -50,6 +55,14 @@ interface ProfileData {
 export function Profile() {
   const [profileData, setProfileData] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editForm, setEditForm] = useState({
+    username: '',
+    playstyle: '',
+    chess_com_username: '',
+    lichess_username: ''
+  })
+  const [saving, setSaving] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -57,6 +70,13 @@ export function Profile() {
       try {
         const data = await getProfileData() as ProfileData
         setProfileData(data)
+        // Populate edit form with current data
+        setEditForm({
+          username: data.user.username || '',
+          playstyle: data.user.playstyle || '',
+          chess_com_username: data.user.chess_com_username || '',
+          lichess_username: data.user.lichess_username || ''
+        })
       } catch (error) {
         console.error('Error fetching profile data:', error)
         toast({
@@ -71,6 +91,57 @@ export function Profile() {
 
     fetchProfileData()
   }, [toast])
+
+  const handleSaveProfile = async () => {
+    try {
+      setSaving(true)
+      
+      // Only send fields that have changed
+      const updates: any = {}
+      if (editForm.username !== profileData?.user.username) {
+        updates.username = editForm.username
+      }
+      if (editForm.playstyle !== profileData?.user.playstyle) {
+        updates.playstyle = editForm.playstyle
+      }
+      if (editForm.chess_com_username !== profileData?.user.chess_com_username) {
+        updates.chess_com_username = editForm.chess_com_username
+      }
+      if (editForm.lichess_username !== profileData?.user.lichess_username) {
+        updates.lichess_username = editForm.lichess_username
+      }
+
+      if (Object.keys(updates).length === 0) {
+        toast({
+          title: "No changes",
+          description: "No changes were made to your profile",
+        })
+        setEditDialogOpen(false)
+        return
+      }
+
+      await updateProfile(updates)
+      
+      // Refresh profile data
+      const updatedData = await getProfileData() as ProfileData
+      setProfileData(updatedData)
+      
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      })
+      setEditDialogOpen(false)
+    } catch (error: any) {
+      console.error('Error updating profile:', error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const getSkillColor = (level: number, maxLevel: number) => {
     const percentage = (level / maxLevel) * 100
@@ -126,10 +197,96 @@ export function Profile() {
             </div>
 
             <div className="text-center space-y-4">
-              <Button className="chess-button">
-                <User className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Button>
+              <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="chess-button">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Edit Profile</DialogTitle>
+                    <DialogDescription>
+                      Update your profile information and chess platform usernames for game sync.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="username" className="text-right">
+                        Username
+                      </Label>
+                      <Input
+                        id="username"
+                        value={editForm.username}
+                        onChange={(e) => setEditForm({...editForm, username: e.target.value})}
+                        className="col-span-3"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="playstyle" className="text-right">
+                        Playstyle
+                      </Label>
+                      <Input
+                        id="playstyle"
+                        value={editForm.playstyle}
+                        onChange={(e) => setEditForm({...editForm, playstyle: e.target.value})}
+                        className="col-span-3"
+                        placeholder="e.g., Aggressive, Positional, Tactical"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="chess_com_username" className="text-right">
+                        Chess.com
+                      </Label>
+                      <Input
+                        id="chess_com_username"
+                        value={editForm.chess_com_username}
+                        onChange={(e) => setEditForm({...editForm, chess_com_username: e.target.value})}
+                        className="col-span-3"
+                        placeholder="Your Chess.com username"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="lichess_username" className="text-right">
+                        Lichess
+                      </Label>
+                      <Input
+                        id="lichess_username"
+                        value={editForm.lichess_username}
+                        onChange={(e) => setEditForm({...editForm, lichess_username: e.target.value})}
+                        className="col-span-3"
+                        placeholder="Your Lichess username"
+                      />
+                    </div>
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setEditDialogOpen(false)}
+                      disabled={saving}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveProfile} disabled={saving}>
+                      {saving ? (
+                        "Saving..."
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="text-center">
@@ -139,6 +296,31 @@ export function Profile() {
                 <div className="text-center">
                   <div className="font-bold text-purple-600">{profileData.user.lessonsCompleted}</div>
                   <div className="text-muted-foreground">Lessons Done</div>
+                </div>
+              </div>
+              
+              {/* Chess Platform Usernames */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">Chess Platforms</div>
+                <div className="flex flex-col gap-1">
+                  {profileData.user.chess_com_username ? (
+                    <Badge variant="secondary" className="w-fit mx-auto">
+                      Chess.com: {profileData.user.chess_com_username}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="w-fit mx-auto text-muted-foreground">
+                      Chess.com: Not linked
+                    </Badge>
+                  )}
+                  {profileData.user.lichess_username ? (
+                    <Badge variant="secondary" className="w-fit mx-auto">
+                      Lichess: {profileData.user.lichess_username}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="w-fit mx-auto text-muted-foreground">
+                      Lichess: Not linked
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>

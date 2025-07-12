@@ -19,6 +19,8 @@ interface RegisterData {
   password: string
   rating: number
   playstyle: string
+  chess_com_username?: string
+  lichess_username?: string
   rating_progress: any[]
 }
 
@@ -27,12 +29,14 @@ interface SyncJob {
   platform: string
   username: string
   status: 'pending' | 'fetching' | 'analyzing' | 'completed' | 'failed'
-  progress: number
   games_found: number
   games_analyzed: number
-  started_at: string
+  created_at: string
   completed_at?: string
-  error_message?: string
+  error?: string
+  user_id: string
+  months_requested: number
+  updated_at?: string
 }
 
 interface GameData {
@@ -41,7 +45,9 @@ interface GameData {
   game_id: string
   white_player: string
   black_player: string
+  opponent: string
   result: string
+  user_result: string
   time_control: string
   opening: string
   pgn: string
@@ -49,6 +55,7 @@ interface GameData {
   analysis_summary?: string
   white_accuracy?: number
   black_accuracy?: number
+  user_accuracy?: number
   played_at: string
 }
 

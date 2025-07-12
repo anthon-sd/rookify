@@ -11,6 +11,8 @@ class UserBase(BaseModel):
     username: str
     rating: int
     playstyle: str
+    chess_com_username: Optional[str] = None
+    lichess_username: Optional[str] = None
     rating_progress: List[RatingProgressEntry]
 
 class UserCreate(UserBase):
@@ -26,6 +28,8 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     rating: Optional[int] = None
     playstyle: Optional[str] = None
+    chess_com_username: Optional[str] = None
+    lichess_username: Optional[str] = None
     rating_progress: Optional[List[RatingProgressEntry]] = None
 
 class UserInDB(UserBase):

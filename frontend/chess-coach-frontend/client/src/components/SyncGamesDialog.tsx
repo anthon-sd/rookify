@@ -10,8 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+
 import { 
   ExternalLink, 
+  Calendar as CalendarIcon,
   Clock, 
   CheckCircle, 
   AlertCircle, 
@@ -36,7 +38,10 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
   const [platform, setPlatform] = useState<string>("")
   const [username, setUsername] = useState("")
   const [lichessToken, setLichessToken] = useState("")
-  const [months, setMonths] = useState(1)
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+    to: new Date() // today
+  })
   
   // Filters
   const [gameTypes, setGameTypes] = useState<string[]>([])
@@ -52,13 +57,21 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
   
   const { toast } = useToast()
 
-  // Simple date formatting functions
-  const formatDisplayDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString()
+  // Date formatting functions
+  const formatDate = (date: Date): string => {
+    return date.toISOString().split('T')[0]
   }
 
-  const formatDisplayTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleTimeString()
+  const formatDisplayDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return "Unknown date"
+    const date = new Date(dateString)
+    return isNaN(date.getTime()) ? "Invalid date" : date.toLocaleDateString()
+  }
+
+  const formatDisplayTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return "Unknown time"
+    const date = new Date(dateString)
+    return isNaN(date.getTime()) ? "Invalid time" : date.toLocaleTimeString()
   }
 
   // Load sync history when dialog opens
@@ -90,7 +103,7 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
           } else if (status.status === 'failed') {
             toast({
               title: "Sync Failed",
-              description: status.error_message || "An unknown error occurred",
+              description: status.error || "An unknown error occurred",
               variant: "destructive",
             })
           }
@@ -109,6 +122,22 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
       // The API returns an object with sync_jobs array or just an array
       const historyArray = Array.isArray(history) ? history : (history as any).sync_jobs || []
       setSyncHistory(historyArray)
+      
+      // Check if there's an active sync job that should be resumed
+      const activeJob = historyArray.find((job: SyncJob) => 
+        ['pending', 'fetching', 'analyzing'].includes(job.status)
+      )
+      
+      if (activeJob && !currentSync) {
+        console.log('Resuming active sync job:', activeJob.id, 'Status:', activeJob.status)
+        setCurrentSync(activeJob)
+        setActiveTab("progress")
+        
+        // Set initial progress if available
+        if (activeJob.games_found > 0) {
+          setProgress((activeJob.games_analyzed / activeJob.games_found) * 100)
+        }
+      }
     } catch (error) {
       console.error('Error loading sync history:', error)
     }
@@ -133,12 +162,31 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
       return
     }
 
+    if (!dateRange.from || !dateRange.to) {
+      toast({
+        title: "Date Range Required",
+        description: "Please select both start and end dates for the sync",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (dateRange.from > dateRange.to) {
+      toast({
+        title: "Invalid Date Range",
+        description: "Start date must be before end date",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
     setProgress(0)
 
     try {
       const syncOptions = {
-        months: months,
+        fromDate: formatDate(dateRange.from),
+        toDate: formatDate(dateRange.to),
         lichessToken: platform === "lichess" ? lichessToken : undefined,
         game_types: gameTypes.length > 0 ? gameTypes : undefined,
         results: results.length > 0 ? results : undefined,
@@ -151,7 +199,7 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
       
       toast({
         title: "Sync Started! ⚡",
-        description: `Fetching games from ${platform}...`,
+        description: `Fetching games from ${platform} between ${formatDisplayDate(dateRange.from.toISOString())} and ${formatDisplayDate(dateRange.to.toISOString())}`,
       })
     } catch (error: any) {
       toast({
@@ -192,6 +240,12 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     }
+  }
+
+  const setQuickDateRange = (days: number) => {
+    const to = new Date()
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    setDateRange({ from, to })
   }
 
   const defaultTrigger = (
@@ -279,22 +333,98 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
               </div>
             )}
 
-            {/* Date Range */}
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>Sync last N months</Label>
-                <Select value={months.toString()} onValueChange={(value: string) => setMonths(parseInt(value))}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 month</SelectItem>
-                    <SelectItem value="3">3 months</SelectItem>
-                    <SelectItem value="6">6 months</SelectItem>
-                    <SelectItem value="12">1 year</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Date Range Selection */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Date Range</Label>
+                <p className="text-sm text-muted-foreground">Select the period of games to sync and analyze</p>
               </div>
+
+              {/* Quick Date Range Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuickDateRange(7)}
+                  type="button"
+                >
+                  Last 7 days
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuickDateRange(30)}
+                  type="button"
+                >
+                  Last 30 days
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuickDateRange(90)}
+                  type="button"
+                >
+                  Last 3 months
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuickDateRange(365)}
+                  type="button"
+                >
+                  Last year
+                </Button>
+              </div>
+
+              {/* Custom Date Range Pickers */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="from-date">From Date</Label>
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="from-date"
+                      type="date"
+                      value={dateRange.from ? formatDate(dateRange.from) : ""}
+                      onChange={(e) => {
+                        const date = e.target.value ? new Date(e.target.value) : undefined
+                        setDateRange(prev => ({ ...prev, from: date }))
+                      }}
+                      max={formatDate(new Date())}
+                      min="2010-01-01"
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="to-date">To Date</Label>
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="to-date"
+                      type="date"
+                      value={dateRange.to ? formatDate(dateRange.to) : ""}
+                      onChange={(e) => {
+                        const date = e.target.value ? new Date(e.target.value) : undefined
+                        setDateRange(prev => ({ ...prev, to: date }))
+                      }}
+                      max={formatDate(new Date())}
+                      min="2010-01-01"
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Range Summary */}
+              {dateRange.from && dateRange.to && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    <strong>Selected Range:</strong> {formatDisplayDate(dateRange.from.toISOString())} to {formatDisplayDate(dateRange.to.toISOString())}
+                    {' '}({Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} days)
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Filters */}
@@ -398,10 +528,10 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {currentSync.status === 'failed' && currentSync.error_message && (
+                  {currentSync.status === 'failed' && currentSync.error && (
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{currentSync.error_message}</AlertDescription>
+                      <AlertDescription>{currentSync.error}</AlertDescription>
                     </Alert>
                   )}
                   
@@ -460,7 +590,7 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
                             </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {formatDisplayDate(job.started_at)} at {formatDisplayTime(job.started_at)}
+                            {formatDisplayDate(job.created_at)} at {formatDisplayTime(job.created_at)}
                           </div>
                         </div>
                         <div className="text-right text-sm">
@@ -472,10 +602,10 @@ export function SyncGamesDialog({ trigger, onSyncComplete }: SyncGamesDialogProp
                           )}
                         </div>
                       </div>
-                      {job.error_message && (
+                      {job.error && (
                         <Alert variant="destructive" className="mt-3">
                           <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{job.error_message}</AlertDescription>
+                          <AlertDescription>{job.error}</AlertDescription>
                         </Alert>
                       )}
                     </CardContent>

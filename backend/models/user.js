@@ -17,7 +17,9 @@ module.exports = (sequelize, DataTypes) => {
     username: DataTypes.STRING,
     email: DataTypes.STRING,
     rating: DataTypes.INTEGER,
-    playstyle: DataTypes.STRING
+    playstyle: DataTypes.STRING,
+    chess_com_username: DataTypes.STRING,
+    lichess_username: DataTypes.STRING
   }, {
     sequelize,
     modelName: 'User',

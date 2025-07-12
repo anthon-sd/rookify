@@ -7,6 +7,8 @@ interface User {
   username: string
   rating: number
   playstyle: string
+  chess_com_username?: string
+  lichess_username?: string
 }
 
 type AuthContextType = {

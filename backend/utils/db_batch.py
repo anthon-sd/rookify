@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
 url = os.environ.get("SUPABASE_URL")
-key = os.environ.get("SUPABASE_ANON_KEY")
+key = os.environ.get("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(url, key)
 
 class DatabaseBatchOperations:

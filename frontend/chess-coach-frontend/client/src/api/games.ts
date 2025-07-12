@@ -5,26 +5,42 @@ import { backendApi } from './api';
 // Request: { limit?: number, offset?: number, platform?: string }
 // Response: Array of GameData objects
 export const getGames = async (limit = 20, offset = 0, platform?: string) => {
-  console.log('Fetching games...');
+  console.log('🔍 Fetching games...');
+  console.log('🔍 Auth status:', backendApi.isAuthenticated());
+  console.log('🔍 User:', backendApi.user);
+  console.log('🔍 Token exists:', !!backendApi.token);
   try {
     const gamesResponse = await backendApi.getGames(limit, offset, platform);
+    console.log('🔍 Backend response:', gamesResponse);
     const games = Array.isArray(gamesResponse) ? gamesResponse : [];
-    // Transform the backend response to match the expected frontend format
-    return {
-      games: games.map(game => ({
-        id: game.id,
-        opponent: game.white_player === backendApi.user?.username ? game.black_player : game.white_player,
-        result: game.result,
-        accuracy: game.white_player === backendApi.user?.username ? game.white_accuracy || 0 : game.black_accuracy || 0,
-        date: new Date(game.played_at).toISOString().split('T')[0],
-        opening: game.opening,
-        analysisStatus: game.analysis_summary ? 'completed' : 'pending',
-        keyInsight: game.analysis_summary || 'Analysis pending',
-        timeControl: game.time_control,
-        platform: game.platform,
-        pgn: game.pgn
-      }))
-    };
+    
+          // Transform the backend response to match the expected frontend format
+      return {
+        games: games.map(game => {
+          // Debug logging for opponent determination
+          console.log('🔍 Game data:', {
+            white_player: game.white_player,
+            black_player: game.black_player,
+            backend_opponent: game.opponent,
+            user_result: game.user_result
+          });
+          
+          // Use the opponent and user_result that the backend already calculated correctly
+          return {
+            id: game.id,
+            opponent: game.opponent || 'Unknown',
+            result: game.user_result || 'unknown',
+            accuracy: game.user_accuracy || 0,
+            date: game.played_at ? new Date(game.played_at).toISOString().split('T')[0] : 'Unknown',
+            opening: game.opening || 'Unknown Opening',
+            analysisStatus: game.analysis_summary ? 'completed' : 'pending',
+            keyInsight: game.analysis_summary || 'Analysis pending',
+            timeControl: game.time_control || 'Unknown',
+            platform: game.platform || '',
+            pgn: game.pgn || ''
+          };
+        })
+      };
   } catch (error: any) {
     console.error('Error fetching games:', error);
     throw new Error(error.message);

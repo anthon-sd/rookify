@@ -58,6 +58,8 @@ export const getProfileData = async () => {
         rating: user.rating,
         ratingHistory,
         playstyle: user.playstyle || 'Balanced Player',
+        chess_com_username: user.chess_com_username,
+        lichess_username: user.lichess_username,
         joinDate: user.created_at || new Date().toISOString().split('T')[0],
         totalGames,
         lessonsCompleted: Math.floor(totalGames / 5) // Estimate based on games
@@ -147,6 +149,36 @@ export const getProfileData = async () => {
     };
   } catch (error: any) {
     console.error('Error fetching profile data:', error);
+    throw new Error(error.message);
+  }
+};
+
+// Description: Update user profile data
+// Endpoint: PUT /users/me
+// Request: Updated user profile fields including chess platform usernames
+// Response: Updated user profile
+export const updateProfile = async (updates: {
+  username?: string,
+  email?: string,
+  rating?: number,
+  playstyle?: string,
+  chess_com_username?: string,
+  lichess_username?: string
+}) => {
+  console.log('Updating profile data:', updates);
+  try {
+    if (!backendApi.isAuthenticated()) {
+      throw new Error('User not authenticated');
+    }
+
+    const response = await backendApi.authenticatedRequest('/users/me', {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+
+    return response;
+  } catch (error: any) {
+    console.error('Error updating profile:', error);
     throw new Error(error.message);
   }
 };

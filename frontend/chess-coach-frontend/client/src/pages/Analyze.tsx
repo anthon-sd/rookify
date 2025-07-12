@@ -37,11 +37,15 @@ export function Analyze() {
   const { toast } = useToast()
 
   const fetchGames = async () => {
+    console.log('🎮 Analyze page: Starting fetchGames...')
     try {
       const data = await getGames() as { games: Game[] }
+      console.log('🎮 Analyze page: Received data:', data)
+      console.log('🎮 Analyze page: Games array:', data.games)
+      console.log('🎮 Analyze page: Number of games:', data.games?.length || 0)
       setGames(data.games)
     } catch (error) {
-      console.error('Error fetching games:', error)
+      console.error('❌ Error fetching games:', error)
       toast({
         title: "Error",
         description: "Failed to load games",
