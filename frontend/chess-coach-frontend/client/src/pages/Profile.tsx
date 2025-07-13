@@ -363,11 +363,11 @@ export function Profile() {
             <Card className="chess-card">
               <CardContent className="p-6 text-center">
                 <div className="text-3xl font-bold text-green-600 mb-2">
-                  {profileData.statistics.accuracy}%
+                  {profileData.statistics.accuracy.toFixed(1)}%
                 </div>
                 <div className="text-sm text-muted-foreground mb-2">Current Accuracy</div>
                 <div className="text-xs text-green-600">
-                  +{profileData.statistics.accuracy - profileData.statistics.averageAccuracy}% above average
+                  +{(profileData.statistics.accuracy - profileData.statistics.averageAccuracy).toFixed(1)}% above average
                 </div>
               </CardContent>
             </Card>

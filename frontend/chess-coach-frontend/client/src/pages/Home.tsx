@@ -176,9 +176,9 @@ export function Home() {
         <Card className="rookify-card">
           <CardContent className="p-4 text-center">
             <div className="flex items-center justify-center gap-1">
-              <span className="text-2xl font-bold text-emerald-600">{dashboardData.accuracy.current}%</span>
+              <span className="text-2xl font-bold text-emerald-600">{dashboardData.accuracy.current.toFixed(1)}%</span>
               {dashboardData.accuracy.trend > 0 && (
-                <span className="text-sm text-emerald-500">+{dashboardData.accuracy.trend}%</span>
+                <span className="text-sm text-emerald-500">+{dashboardData.accuracy.trend.toFixed(1)}%</span>
               )}
             </div>
             <p className="text-sm text-muted-foreground">Accuracy</p>

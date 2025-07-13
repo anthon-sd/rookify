@@ -654,9 +654,10 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                 )
                 
                 # Extract enhanced metadata from PGN
-                from utils.db_batch import extract_pgn_headers, calculate_game_statistics
+                from utils.db_batch import extract_pgn_headers, calculate_game_statistics, generate_analysis_summary
                 pgn_headers = extract_pgn_headers(game['pgn'])
                 game_stats = calculate_game_statistics(analyzed_moments)
+                analysis_summary = generate_analysis_summary(analyzed_moments, game_stats)
                 
                 # Store analysis with enhanced schema
                 game_analysis = {
@@ -666,6 +667,7 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                     'game_id': game.get('id', game['url'].split('/')[-1]),
                     'pgn': game['pgn'],
                     'key_moments': analyzed_moments,
+                    'analysis': analysis_summary,  # Add analysis summary for frontend
                     'sync_job_id': sync_job_id,
                     
                     # Enhanced fields from PGN headers
@@ -1441,6 +1443,50 @@ async def run_vector_db_sync(user_id: Optional[str] = None, limit: Optional[int]
         
     except Exception as e:
         print(f"❌ Vector DB sync failed: {e}")
+
+@app.post("/admin/backfill-analysis-summaries")
+async def backfill_analysis_summaries():
+    """Backfill analysis summaries for games that have key_moments but no analysis summary"""
+    try:
+        # Get games that have key_moments but no analysis summary
+        response = supabase.table('game_analysis').select('*').is_('analysis', 'null').not_.is_('key_moments', 'null').execute()
+        games_to_update = response.data
+        
+        if not games_to_update:
+            return {"message": "No games need analysis summary backfill", "updated_count": 0}
+        
+        from utils.db_batch import generate_analysis_summary, calculate_game_statistics
+        updated_count = 0
+        
+        for game in games_to_update:
+            try:
+                # Calculate game statistics from key_moments
+                key_moments = game.get('key_moments', [])
+                if not key_moments:
+                    continue
+                
+                game_stats = calculate_game_statistics(key_moments)
+                analysis_summary = generate_analysis_summary(key_moments, game_stats)
+                
+                # Update the game with the analysis summary
+                supabase.table('game_analysis').update({
+                    'analysis': analysis_summary
+                }).eq('id', game['id']).execute()
+                
+                updated_count += 1
+                
+            except Exception as e:
+                print(f"Error updating game {game.get('id')}: {e}")
+                continue
+        
+        return {
+            "message": f"Successfully backfilled analysis summaries for {updated_count} games",
+            "updated_count": updated_count,
+            "total_candidates": len(games_to_update)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error backfilling analysis summaries: {str(e)}")
 
 @app.get("/migrate/add-chess-usernames")
 async def migrate_add_chess_usernames():

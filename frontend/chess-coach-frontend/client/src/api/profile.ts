@@ -32,8 +32,8 @@ export const getProfileData = async () => {
     }, 0);
     
     const averageAccuracy = gamesWithAccuracy.length > 0 
-      ? Math.round(totalAccuracy / gamesWithAccuracy.length) 
-      : 75;
+      ? Math.round((totalAccuracy / gamesWithAccuracy.length) * 10) / 10
+      : 75.0;
 
     // Generate rating history (simplified)
     const ratingHistory = [];

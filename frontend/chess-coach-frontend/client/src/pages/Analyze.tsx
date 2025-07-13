@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react"
-import { getGames, getGameAnalysis } from "@/api/games"
+import { getGames, getGameAnalysis } from '@/api/games'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, Star } from "lucide-react"
-import { useToast } from "@/hooks/useToast"
+import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 
 interface Game {
@@ -22,10 +22,11 @@ interface Game {
 }
 
 interface GameAnalysis {
-  moves: Array<{ move: string, evaluation: number, accuracy: string, comment?: string }>
-  criticalMoments: Array<{ moveNumber: number, type: string, description: string }>
+  moves: Array<{ move: string, evaluation: number, accuracy: string, comment?: string, moveNumber: number }>
+  criticalMoments: Array<{ moveNumber: number, type: string, description: string, delta_cp?: number, move?: string }>
   summary: { accuracy: number, mistakes: number, blunders: number, brilliantMoves: number }
   coachNotes: string
+  moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
 }
 
 export function Analyze() {
@@ -63,6 +64,45 @@ export function Analyze() {
   const handleSyncComplete = () => {
     // Refresh games list when sync completes
     fetchGames()
+  }
+
+  const handleBackfillAnalysisSummaries = async () => {
+    try {
+      toast({
+        title: "Processing...",
+        description: "Fixing analysis status for existing games...",
+      })
+      
+      // Direct fetch to bypass authentication issues for now
+      const response = await fetch('http://localhost:8000/admin/backfill-analysis-summaries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const result = await response.json()
+      
+      toast({
+        title: "Success!",
+        description: `Fixed ${result.updated_count} games. Refreshing game list...`,
+      })
+      
+      // Refresh the games list to show updated statuses
+      fetchGames()
+      
+    } catch (error) {
+      console.error('Error backfilling analysis summaries:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fix analysis status. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleGameSelect = async (game: Game) => {
@@ -163,6 +203,14 @@ export function Analyze() {
               </Button>
             }
           />
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 text-orange-600 border-orange-200 hover:bg-orange-50" 
+            onClick={handleBackfillAnalysisSummaries}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Fix Analysis Status
+          </Button>
         </div>
       </div>
 
@@ -197,7 +245,7 @@ export function Analyze() {
                   <div className="flex items-center gap-2">
                     {getStatusIcon(game.analysisStatus)}
                     <span className={`font-bold ${getAccuracyColor(game.accuracy)}`}>
-                      {game.accuracy}%
+                      {game.accuracy.toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -246,7 +294,7 @@ export function Analyze() {
                 <TabsContent value="overview" className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{gameAnalysis.summary.accuracy}%</div>
+                      <div className="text-2xl font-bold text-green-600">{gameAnalysis.summary.accuracy.toFixed(1)}%</div>
                       <div className="text-sm text-muted-foreground">Accuracy</div>
                     </div>
                     <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
@@ -263,40 +311,124 @@ export function Analyze() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <h4 className="font-medium">Accuracy Throughout Game</h4>
-                    <Progress value={gameAnalysis.summary.accuracy} className="h-2" />
+                    {gameAnalysis.moveAccuracyData && gameAnalysis.moveAccuracyData.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-10 gap-1 mb-2">
+                          {gameAnalysis.moveAccuracyData.slice(0, 40).map((moveData, index) => (
+                            <div
+                              key={index}
+                              className={`h-6 rounded text-xs flex items-center justify-center text-white font-bold ${
+                                moveData.type === 'blunder' ? 'bg-red-600' :
+                                moveData.type === 'mistake' || moveData.type === 'miss' ? 'bg-orange-500' :
+                                moveData.type === 'inaccuracy' ? 'bg-yellow-500' :
+                                moveData.type === 'brilliant' || moveData.type === 'great' ? 'bg-purple-600' :
+                                'bg-green-500'
+                              }`}
+                              title={`Move ${moveData.moveNumber}: ${moveData.accuracy}% (${moveData.type})`}
+                            >
+                              {moveData.moveNumber}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs">
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-500 rounded"></div>
+                            <span>Good</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                            <span>Inaccuracy</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                            <span>Mistake</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-red-600 rounded"></div>
+                            <span>Blunder</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-purple-600 rounded"></div>
+                            <span>Brilliant</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Progress value={gameAnalysis.summary.accuracy} className="h-3" />
+                        <p className="text-sm text-muted-foreground">Overall game accuracy</p>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
 
                 <TabsContent value="mistakes" className="space-y-3">
-                  {gameAnalysis.moves
-                    .filter(move => move.accuracy === 'mistake' || move.accuracy === 'blunder')
-                    .map((move, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono font-bold">{move.move}</span>
-                          <Badge variant={move.accuracy === 'blunder' ? 'destructive' : 'secondary'}>
-                            {move.accuracy}
-                          </Badge>
+                  {gameAnalysis.moves && gameAnalysis.moves.length > 0 ? (
+                    gameAnalysis.moves
+                      .filter(move => move.accuracy === 'mistake' || move.accuracy === 'blunder' || move.accuracy === 'miss')
+                      .map((move, index) => (
+                        <div key={index} className="p-3 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono font-bold">{move.move}</span>
+                            <span className="text-sm text-muted-foreground">Move {move.moveNumber}</span>
+                            <Badge variant={move.accuracy === 'blunder' ? 'destructive' : 'secondary'}>
+                              {move.accuracy}
+                            </Badge>
+                          </div>
+                          {move.comment && (
+                            <p className="text-sm text-muted-foreground">{move.comment}</p>
+                          )}
                         </div>
-                        {move.comment && (
-                          <p className="text-sm text-muted-foreground">{move.comment}</p>
-                        )}
-                      </div>
-                    ))}
+                      ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No significant mistakes found in this game!</p>
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="moments" className="space-y-3">
-                  {gameAnalysis.criticalMoments.map((moment, index) => (
-                    <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
-                      {getMomentIcon(moment.type)}
-                      <div>
-                        <div className="font-medium">Move {moment.moveNumber}</div>
-                        <p className="text-sm text-muted-foreground">{moment.description}</p>
+                  {gameAnalysis.criticalMoments && gameAnalysis.criticalMoments.length > 0 ? (
+                    gameAnalysis.criticalMoments.map((moment, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                        onClick={() => {
+                          // You could add PGN navigation here later
+                          console.log('Navigate to move', moment.moveNumber, moment);
+                        }}
+                      >
+                        {getMomentIcon(moment.type)}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">Move {moment.moveNumber}</span>
+                            {moment.move && (
+                              <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                {moment.move}
+                              </span>
+                            )}
+                            <Badge variant={moment.type === 'blunder' ? 'destructive' : moment.type === 'brilliant' ? 'default' : 'secondary'}>
+                              {moment.type}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{moment.description}</p>
+                          {moment.delta_cp && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Evaluation change: {moment.delta_cp > 0 ? '+' : ''}{moment.delta_cp} centipawns
+                            </p>
+                          )}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No critical moments identified in this game.</p>
                     </div>
-                  ))}
+                  )}
                 </TabsContent>
 
                 <TabsContent value="coach" className="space-y-4">

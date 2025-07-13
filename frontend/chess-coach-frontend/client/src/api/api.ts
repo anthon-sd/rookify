@@ -50,13 +50,22 @@ interface GameData {
   user_result: string
   time_control: string
   opening: string
+  opening_name?: string
   pgn: string
   key_moments?: string | any[]
   analysis_summary?: string
+  analysis?: string  // Added for analysis summary
   white_accuracy?: number
   black_accuracy?: number
   user_accuracy?: number
+  avg_accuracy?: number  // Added for average accuracy
   played_at: string
+  // Analysis statistics
+  mistakes_count?: number
+  blunders_count?: number
+  inaccuracies_count?: number
+  brilliant_moves_count?: number
+  total_moves?: number
 }
 
 class BackendAPI {
@@ -354,6 +363,28 @@ class BackendAPI {
     }
 
     return this.authenticatedRequest('/users/me')
+  }
+
+  // Admin endpoint to backfill analysis summaries
+  async backfillAnalysisSummaries() {
+    if (!this.isAuthenticated()) {
+      throw new Error('User not authenticated');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/admin/backfill-analysis-summaries`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
   }
 }
 

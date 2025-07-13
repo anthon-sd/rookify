@@ -182,6 +182,54 @@ def extract_recommendations_from_moments(analyzed_moments: List[Dict]) -> List[D
     
     return all_recommendations
 
+def generate_analysis_summary(analyzed_moments: List[Dict], game_stats: Dict) -> str:
+    """Generate a concise analysis summary from analyzed moments and game statistics"""
+    if not analyzed_moments:
+        return "Game analyzed - no critical moments found."
+    
+    # Count different types of moments
+    blunders = game_stats.get('blunders_count', 0)
+    mistakes = game_stats.get('mistakes_count', 0)
+    inaccuracies = game_stats.get('inaccuracies_count', 0)
+    total_moves = game_stats.get('total_moves', 0)
+    accuracy = game_stats.get('avg_accuracy', 0)
+    
+    # Find the most critical moment
+    critical_moments = [m for m in analyzed_moments if m.get('accuracy_class', '').lower() in ['blunder', 'mistake', 'miss']]
+    
+    # Build summary
+    summary_parts = []
+    
+    # Overall performance
+    if accuracy >= 85:
+        summary_parts.append(f"Strong performance with {accuracy:.1f}% accuracy.")
+    elif accuracy >= 75:
+        summary_parts.append(f"Good performance with {accuracy:.1f}% accuracy.")
+    else:
+        summary_parts.append(f"Room for improvement - {accuracy:.1f}% accuracy.")
+    
+    # Highlight major issues
+    if blunders > 0:
+        summary_parts.append(f"Made {blunders} blunder{'s' if blunders > 1 else ''}.")
+    if mistakes > 0:
+        summary_parts.append(f"Made {mistakes} mistake{'s' if mistakes > 1 else ''}.")
+    
+    # Key insight from most critical moment
+    if critical_moments:
+        critical_moment = critical_moments[0]  # Take the first critical moment
+        move_num = critical_moment.get('move_number', 'unknown')
+        accuracy_class = critical_moment.get('accuracy_class', '').lower()
+        summary_parts.append(f"Key moment: Move {move_num} ({accuracy_class}).")
+    
+    # If no major errors, mention positive aspects
+    if blunders == 0 and mistakes == 0:
+        if inaccuracies == 0:
+            summary_parts.append("Clean game with no major errors!")
+        else:
+            summary_parts.append(f"Good accuracy with only {inaccuracies} minor inaccurac{'ies' if inaccuracies > 1 else 'y'}.")
+    
+    return " ".join(summary_parts)
+
 def batch_upload_to_pinecone(moments: List[Dict], batch_size: int = 100):
     """Upload moments to Pinecone in batches"""
     try:

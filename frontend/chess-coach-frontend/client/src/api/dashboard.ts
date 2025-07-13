@@ -50,8 +50,8 @@ export const getDashboardData = async () => {
     }, 0);
     
     const averageAccuracy = gamesWithAccuracy.length > 0 
-      ? Math.round(totalAccuracy / gamesWithAccuracy.length) 
-      : 75;
+      ? Math.round((totalAccuracy / gamesWithAccuracy.length) * 10) / 10
+      : 75.0;
 
     // Get time of day for greeting
     const hour = new Date().getHours();
