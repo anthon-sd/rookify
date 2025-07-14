@@ -13,7 +13,7 @@ export function AppLayout() {
       <div className={`${!isMobile ? 'ml-64' : ''} min-h-screen`}>
         <TopBar />
         <main className={`${isMobile ? 'pb-20 pt-24' : 'pt-28'} p-4 md:p-6`}>
-          <div className="mx-auto max-w-7xl mt-8 md:mt-10">
+          <div className="mx-auto max-w-screen-2xl mt-8 md:mt-10">
             <Outlet />
           </div>
         </main>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { getGames, getGameAnalysis } from '@/api/games'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, Star } from "lucide-react"
 import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
+import { ChessBoard } from "@/components/ChessBoard"
 
 interface Game {
   id: string
@@ -19,6 +21,7 @@ interface Game {
   analysisStatus: 'completed' | 'in_progress' | 'pending'
   keyInsight: string
   timeControl: string
+  pgn: string
 }
 
 interface GameAnalysis {
@@ -27,6 +30,9 @@ interface GameAnalysis {
   summary: { accuracy: number, mistakes: number, blunders: number, brilliantMoves: number }
   coachNotes: string
   moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
+  pgn?: string
+  white_player?: string
+  black_player?: string
 }
 
 export function Analyze() {
@@ -36,6 +42,84 @@ export function Analyze() {
   const [loading, setLoading] = useState(true)
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
+
+  // Helper function to extract player names from PGN
+  const extractPlayersFromPGN = (pgn: string): { white: string | null, black: string | null } => {
+    if (!pgn) return { white: null, black: null }
+    
+    const lines = pgn.split('\n')
+    let whitePlayer = null
+    let blackPlayer = null
+    
+    for (const line of lines) {
+      const whiteMatch = line.match(/\[White "(.+)"\]/)
+      if (whiteMatch) {
+        whitePlayer = whiteMatch[1]
+      }
+      
+      const blackMatch = line.match(/\[Black "(.+)"\]/)
+      if (blackMatch) {
+        blackPlayer = blackMatch[1]
+      }
+    }
+    
+    return { white: whitePlayer, black: blackPlayer }
+  }
+
+  // Helper function to determine user color
+  const getUserColor = (analysis: GameAnalysis): 'white' | 'black' => {
+    if (!user) {
+      console.log('❌ No user data found, defaulting to white')
+      return 'white'
+    }
+    
+    // Extract player names from PGN
+    const pgn = analysis.pgn || selectedGame?.pgn || ''
+    const players = extractPlayersFromPGN(pgn)
+    
+    console.log('🎯 User color detection:', {
+      pgn_white: players.white,
+      pgn_black: players.black,
+      api_white: analysis.white_player,
+      api_black: analysis.black_player,
+      current_user: user.username,
+      chess_com_username: user.chess_com_username,
+      lichess_username: user.lichess_username
+    })
+    
+    // Use PGN players if available, fallback to API data
+    const whitePlayer = players.white || analysis.white_player
+    const blackPlayer = players.black || analysis.black_player
+    
+    if (!whitePlayer && !blackPlayer) {
+      console.log('❌ No player data found, defaulting to white')
+      return 'white'
+    }
+    
+    // Check if user matches white player (try different username variations)
+    if (whitePlayer && (
+        whitePlayer === user.username || 
+        whitePlayer === user.chess_com_username ||
+        whitePlayer === user.lichess_username)) {
+      console.log('✅ User is WHITE player')
+      return 'white'
+    }
+    
+    // Check if user matches black player
+    if (blackPlayer && (
+        blackPlayer === user.username || 
+        blackPlayer === user.chess_com_username ||
+        blackPlayer === user.lichess_username)) {
+      console.log('✅ User is BLACK player')
+      return 'black'
+    }
+    
+    // Default to white if no match found
+    console.log('❌ No username match found, defaulting to white')
+    console.log('Available players:', { whitePlayer, blackPlayer })
+    return 'white'
+  }
 
   const fetchGames = async () => {
     console.log('🎮 Analyze page: Starting fetchGames...')
@@ -64,45 +148,6 @@ export function Analyze() {
   const handleSyncComplete = () => {
     // Refresh games list when sync completes
     fetchGames()
-  }
-
-  const handleBackfillAnalysisSummaries = async () => {
-    try {
-      toast({
-        title: "Processing...",
-        description: "Fixing analysis status for existing games...",
-      })
-      
-      // Direct fetch to bypass authentication issues for now
-      const response = await fetch('http://localhost:8000/admin/backfill-analysis-summaries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const result = await response.json()
-      
-      toast({
-        title: "Success!",
-        description: `Fixed ${result.updated_count} games. Refreshing game list...`,
-      })
-      
-      // Refresh the games list to show updated statuses
-      fetchGames()
-      
-    } catch (error) {
-      console.error('Error backfilling analysis summaries:', error)
-      toast({
-        title: "Error",
-        description: "Failed to fix analysis status. Please try again.",
-        variant: "destructive",
-      })
-    }
   }
 
   const handleGameSelect = async (game: Game) => {
@@ -203,20 +248,12 @@ export function Analyze() {
               </Button>
             }
           />
-          <Button 
-            variant="outline" 
-            className="flex items-center gap-2 text-orange-600 border-orange-200 hover:bg-orange-50" 
-            onClick={handleBackfillAnalysisSummaries}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Fix Analysis Status
-          </Button>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-7 gap-6">
         {/* Games Library */}
-        <Card className="chess-card">
+        <Card className="chess-card lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-500" />
@@ -227,7 +264,16 @@ export function Analyze() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {games.map((game) => (
+            {games.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="mb-4">No games found. Sync your games to get started!</p>
+                <div className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                  💡 <strong>Tip:</strong> Check out the demo page to see the chess GUI in action! 
+                  <br />Navigate to the "Blank Page" in the sidebar to see a working example.
+                </div>
+              </div>
+            ) : games.map((game) => (
               <div
                 key={game.id}
                 onClick={() => handleGameSelect(game)}
@@ -264,7 +310,7 @@ export function Analyze() {
         </Card>
 
         {/* Game Analysis */}
-        <Card className="chess-card">
+        <Card className="chess-card lg:col-span-5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-purple-500" />
@@ -283,13 +329,23 @@ export function Analyze() {
                 <p className="mt-4 text-muted-foreground">Loading analysis...</p>
               </div>
             ) : gameAnalysis ? (
-              <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+              <Tabs defaultValue="board" className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="board">Board</TabsTrigger>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="mistakes">Mistakes</TabsTrigger>
                   <TabsTrigger value="moments">Key Moments</TabsTrigger>
                   <TabsTrigger value="coach">Coach Notes</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="board" className="space-y-4">
+                  <ChessBoard 
+                    pgn={gameAnalysis.pgn || selectedGame?.pgn || ''}
+                    moves={gameAnalysis.moves}
+                    criticalMoments={gameAnalysis.criticalMoments}
+                    userColor={getUserColor(gameAnalysis)}
+                  />
+                </TabsContent>
 
                 <TabsContent value="overview" className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -316,14 +372,14 @@ export function Analyze() {
                     {gameAnalysis.moveAccuracyData && gameAnalysis.moveAccuracyData.length > 0 ? (
                       <div className="space-y-2">
                         <div className="grid grid-cols-10 gap-1 mb-2">
-                          {gameAnalysis.moveAccuracyData.slice(0, 40).map((moveData, index) => (
+                          {gameAnalysis.moveAccuracyData.map((moveData, index) => (
                             <div
                               key={index}
                               className={`h-6 rounded text-xs flex items-center justify-center text-white font-bold ${
                                 moveData.type === 'blunder' ? 'bg-red-600' :
                                 moveData.type === 'mistake' || moveData.type === 'miss' ? 'bg-orange-500' :
                                 moveData.type === 'inaccuracy' ? 'bg-yellow-500' :
-                                moveData.type === 'brilliant' || moveData.type === 'great' ? 'bg-purple-600' :
+                                moveData.type === 'brilliant' || moveData.type === 'great' ? 'bg-cyan-500' :
                                 'bg-green-500'
                               }`}
                               title={`Move ${moveData.moveNumber}: ${moveData.accuracy}% (${moveData.type})`}
@@ -333,6 +389,10 @@ export function Analyze() {
                           ))}
                         </div>
                         <div className="flex items-center gap-4 text-xs">
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-cyan-500 rounded"></div>
+                            <span>Brilliant</span>
+                          </div>
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-green-500 rounded"></div>
                             <span>Good</span>
@@ -348,10 +408,6 @@ export function Analyze() {
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-red-600 rounded"></div>
                             <span>Blunder</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                            <span>Brilliant</span>
                           </div>
                         </div>
                       </div>
@@ -397,7 +453,11 @@ export function Analyze() {
                         key={index} 
                         className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                         onClick={() => {
-                          // You could add PGN navigation here later
+                          // Navigate to board tab and the specific move
+                          const boardTab = document.querySelector('[value="board"]') as HTMLElement;
+                          if (boardTab) {
+                            boardTab.click();
+                          }
                           console.log('Navigate to move', moment.moveNumber, moment);
                         }}
                       >

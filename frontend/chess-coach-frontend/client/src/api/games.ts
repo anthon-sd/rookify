@@ -165,7 +165,9 @@ export const getGameAnalysis = async (gameId: string) => {
       pgn: gameData.pgn,
       opening: gameData.opening_name || gameData.opening,
       result: gameData.result,
-      moveAccuracyData: moveAccuracyData // Add this for the accuracy chart
+      moveAccuracyData: moveAccuracyData, // Add this for the accuracy chart
+      white_player: gameData.white_player,
+      black_player: gameData.black_player
     };
   } catch (error: any) {
     console.error('Error fetching game analysis:', error);
