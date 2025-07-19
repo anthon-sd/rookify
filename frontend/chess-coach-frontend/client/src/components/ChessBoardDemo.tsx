@@ -105,8 +105,12 @@ export function ChessBoardDemo() {
 
       <ChessBoard 
         pgn={samplePGN}
-        moves={sampleMoves}
         criticalMoments={sampleCriticalMoments}
+        moveAccuracyData={sampleMoves.map(move => ({
+          moveNumber: move.moveNumber,
+          accuracy: move.evaluation * 100,
+          type: move.accuracy
+        }))}
       />
 
       <Card>

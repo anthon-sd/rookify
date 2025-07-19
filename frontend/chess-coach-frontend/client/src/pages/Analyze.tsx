@@ -341,9 +341,9 @@ export function Analyze() {
                 <TabsContent value="board" className="space-y-4">
                   <ChessBoard 
                     pgn={gameAnalysis.pgn || selectedGame?.pgn || ''}
-                    moves={gameAnalysis.moves}
                     criticalMoments={gameAnalysis.criticalMoments}
                     userColor={getUserColor(gameAnalysis)}
+                    moveAccuracyData={gameAnalysis.moveAccuracyData}
                   />
                 </TabsContent>
 
@@ -379,22 +379,28 @@ export function Analyze() {
                                 moveData.type === 'blunder' ? 'bg-red-600' :
                                 moveData.type === 'mistake' || moveData.type === 'miss' ? 'bg-orange-500' :
                                 moveData.type === 'inaccuracy' ? 'bg-yellow-500' :
-                                moveData.type === 'brilliant' || moveData.type === 'great' ? 'bg-cyan-500' :
-                                'bg-green-500'
+                                moveData.type === 'brilliant' ? 'bg-cyan-500' :
+                                moveData.type === 'great' ? 'bg-green-500' :
+                                moveData.type === 'good' ? 'bg-green-400' :
+                                'bg-green-400'
                               }`}
-                              title={`Move ${moveData.moveNumber}: ${moveData.accuracy}% (${moveData.type})`}
+                              title={`Half-move ${index + 1}: ${moveData.accuracy}% (${moveData.type})`}
                             >
-                              {moveData.moveNumber}
+                              {Math.floor(index / 2) + 1}{index % 2 === 0 ? 'w' : 'b'}
                             </div>
                           ))}
                         </div>
-                        <div className="flex items-center gap-4 text-xs">
+                        <div className="grid grid-cols-3 gap-2 text-xs">
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-cyan-500 rounded"></div>
                             <span>Brilliant</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-green-500 rounded"></div>
+                            <span>Great</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-400 rounded"></div>
                             <span>Good</span>
                           </div>
                           <div className="flex items-center gap-1">

@@ -17,14 +17,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Move {
-  move: string
-  evaluation: number
-  accuracy: string
-  comment?: string
-  moveNumber: number
-}
-
 interface CriticalMoment {
   moveNumber: number
   type: string
@@ -35,13 +27,13 @@ interface CriticalMoment {
 
 interface ChessBoardProps {
   pgn: string
-  moves?: Move[]
   criticalMoments?: CriticalMoment[]
   userColor?: 'white' | 'black'
   className?: string
+  moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
 }
 
-export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 'white', className }: ChessBoardProps) {
+export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', className, moveAccuracyData = [] }: ChessBoardProps) {
   const [game, setGame] = useState(new Chess())
   const [gameHistory, setGameHistory] = useState<string[]>([])
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
@@ -163,24 +155,27 @@ export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 
 
   // Get move accuracy styling
   const getMoveAccuracyStyle = (moveIndex: number) => {
-    const move = moves.find(m => m.moveNumber === Math.floor(moveIndex / 2) + 1)
-    if (!move) return ''
+    // Direct mapping: moveIndex corresponds to half-move index in moveAccuracyData
+    const moveData = moveAccuracyData[moveIndex]
+    if (!moveData) return ''
 
-    switch (move.accuracy) {
+    // Use the same logic as the "Accuracy Throughout Game" section
+    switch (moveData.type) {
+      case 'blunder':
+        return 'bg-red-600 text-white'
+      case 'mistake':
+      case 'miss':
+        return 'bg-orange-500 text-white'
+      case 'inaccuracy':
+        return 'bg-yellow-500 text-white'
       case 'brilliant':
         return 'bg-cyan-500 text-white'
       case 'great':
         return 'bg-green-500 text-white'
       case 'good':
         return 'bg-green-400 text-white'
-      case 'inaccuracy':
-        return 'bg-yellow-500 text-white'
-      case 'mistake':
-        return 'bg-orange-500 text-white'
-      case 'blunder':
-        return 'bg-red-600 text-white'
       default:
-        return ''
+        return 'bg-green-400 text-white'
     }
   }
 
@@ -206,6 +201,7 @@ export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 
         blackIndex: i + 1
       })
     }
+
     return formattedMoves
   }
 
@@ -361,12 +357,17 @@ export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 
                       onClick={() => goToMove(movePair.whiteIndex)}
                       className={cn(
                         'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
-                        currentMoveIndex === movePair.whiteIndex
-                          ? 'bg-blue-500 text-white'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                        'focus:outline-none focus:ring-0',
                         getMoveAccuracyStyle(movePair.whiteIndex),
                         isCriticalMoment(movePair.whiteIndex) && 'ring-2 ring-yellow-400'
                       )}
+                      style={{
+                        border: currentMoveIndex === movePair.whiteIndex 
+                          ? '3px solid #000000' 
+                          : '3px solid transparent',
+                        outline: 'none',
+                        boxShadow: 'none'
+                      }}
                     >
                       {movePair.white}
                     </button>
@@ -378,12 +379,17 @@ export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 
                         onClick={() => goToMove(movePair.blackIndex)}
                         className={cn(
                           'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
-                          currentMoveIndex === movePair.blackIndex
-                            ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                          'focus:outline-none focus:ring-0',
                           getMoveAccuracyStyle(movePair.blackIndex),
                           isCriticalMoment(movePair.blackIndex) && 'ring-2 ring-yellow-400'
                         )}
+                        style={{
+                          border: currentMoveIndex === movePair.blackIndex 
+                            ? '3px solid #000000' 
+                            : '3px solid transparent',
+                          outline: 'none',
+                          boxShadow: 'none'
+                        }}
                       >
                         {movePair.black}
                       </button>
@@ -404,6 +410,10 @@ export function ChessBoard({ pgn, moves = [], criticalMoments = [], userColor = 
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-green-500 rounded"></div>
                   <span>Great</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-green-400 rounded"></div>
+                  <span>Good</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-yellow-500 rounded"></div>
