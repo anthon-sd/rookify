@@ -352,7 +352,11 @@ class GameAnalyzer:
             # Determine game phase
             phase = self.determine_phase(move_number, board)
 
-            # Create analyzed moment
+            # Get enhanced analysis data from batch results
+            enhanced_before = batch_results.get(position_id_before, {}).get('enhanced_analysis', {})
+            enhanced_after = batch_results.get(position_id_after, {}).get('enhanced_analysis', {})
+            
+            # Create analyzed moment with enhanced data
             analyzed_moment = {
                 **moment,
                 'id': str(uuid.uuid4()),
@@ -366,7 +370,13 @@ class GameAnalyzer:
                 'phase': phase,
                 'timestamp': datetime.utcnow().isoformat(),
                 'llm_analysis': llm_analysis,
-                'llm_used': best_info.get('llm_used', False) or batch_results.get(position_id_after, {}).get('llm_used', False)
+                'llm_used': best_info.get('llm_used', False) or batch_results.get(position_id_after, {}).get('llm_used', False),
+                
+                # Enhanced analysis data from Stockfish
+                'enhanced_before': enhanced_before,
+                'enhanced_after': enhanced_after,
+                'eval_before': best_eval,
+                'eval_after': player_eval
             }
 
             # Generate recommendations for significant mistakes

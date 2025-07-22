@@ -330,10 +330,9 @@ export function Analyze() {
               </div>
             ) : gameAnalysis ? (
               <Tabs defaultValue="board" className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="board">Board</TabsTrigger>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="mistakes">Mistakes</TabsTrigger>
                   <TabsTrigger value="moments">Key Moments</TabsTrigger>
                   <TabsTrigger value="coach">Coach Notes</TabsTrigger>
                 </TabsList>
@@ -344,6 +343,7 @@ export function Analyze() {
                     criticalMoments={gameAnalysis.criticalMoments}
                     userColor={getUserColor(gameAnalysis)}
                     moveAccuracyData={gameAnalysis.moveAccuracyData}
+                    moves={gameAnalysis.moves}
                   />
                 </TabsContent>
 
@@ -424,33 +424,141 @@ export function Analyze() {
                       </div>
                     )}
                   </div>
-                </TabsContent>
 
-                <TabsContent value="mistakes" className="space-y-3">
+                  {/* Centipawn Evaluation Chart */}
                   {gameAnalysis.moves && gameAnalysis.moves.length > 0 ? (
-                    gameAnalysis.moves
-                      .filter(move => move.accuracy === 'mistake' || move.accuracy === 'blunder' || move.accuracy === 'miss')
-                      .map((move, index) => (
-                        <div key={index} className="p-3 border rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono font-bold">{move.move}</span>
-                            <span className="text-sm text-muted-foreground">Move {move.moveNumber}</span>
-                            <Badge variant={move.accuracy === 'blunder' ? 'destructive' : 'secondary'}>
-                              {move.accuracy}
-                            </Badge>
-                          </div>
-                          {move.comment && (
-                            <p className="text-sm text-muted-foreground">{move.comment}</p>
-                          )}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Position Evaluation Throughout Game</h4>
+                        <div className="flex items-center gap-2 text-xs text-blue-600">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>Powered by Stockfish</span>
                         </div>
-                      ))
+                      </div>
+                      
+                      {/* Debug info */}
+                      <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                        Debug: {gameAnalysis.moves.length} moves, Sample evaluations: {
+                          gameAnalysis.moves.slice(0, 5).map(m => `${m.moveNumber}:${m.evaluation}`).join(', ')
+                        }
+                      </div>
+                      <div className="relative bg-gray-50 dark:bg-gray-800 rounded-lg p-4 h-64">
+                        <svg width="100%" height="100%" className="absolute inset-4">
+                          <defs>
+                            <linearGradient id="whiteAdvantage" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(34, 197, 94, 0.3)" />
+                              <stop offset="100%" stopColor="rgba(34, 197, 94, 0.1)" />
+                            </linearGradient>
+                            <linearGradient id="blackAdvantage" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.1)" />
+                              <stop offset="100%" stopColor="rgba(239, 68, 68, 0.3)" />
+                            </linearGradient>
+                          </defs>
+                          
+                          {/* Center line (0 evaluation) */}
+                          <line 
+                            x1="0" 
+                            y1="50%" 
+                            x2="100%" 
+                            y2="50%" 
+                            stroke="currentColor" 
+                            strokeWidth="1" 
+                            opacity="0.3"
+                            strokeDasharray="4,4"
+                          />
+                          
+                          {/* Evaluation line */}
+                          <polyline
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            points={gameAnalysis.moves.map((move, index) => {
+                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
+                              let evaluation = move.evaluation || 0;
+                              
+                              // Handle mate evaluations (convert large values to reasonable bounds)
+                              if (Math.abs(evaluation) > 5000) {
+                                evaluation = evaluation > 0 ? 1000 : -1000;
+                              }
+                              
+                              // Clamp evaluation between -10 and +10 pawns for better visualization
+                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
+                              // Convert to percentage (0% = +10 pawns, 100% = -10 pawns, 50% = equal)
+                              const y = 50 - (clampedEval / 1000) * 50;
+                              return `${x}%,${y}%`;
+                            }).join(' ')}
+                          />
+                          
+                          {/* Fill areas for advantage */}
+                          <polygon
+                            points={`0%,50% ${gameAnalysis.moves.map((move, index) => {
+                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
+                              let evaluation = move.evaluation || 0;
+                              
+                              // Handle mate evaluations
+                              if (Math.abs(evaluation) > 5000) {
+                                evaluation = evaluation > 0 ? 1000 : -1000;
+                              }
+                              
+                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
+                              const y = 50 - (clampedEval / 1000) * 50;
+                              return `${x}%,${Math.min(50, y)}%`;
+                            }).join(' ')} 100%,50%`}
+                            fill="url(#whiteAdvantage)"
+                          />
+                          
+                          <polygon
+                            points={`0%,50% ${gameAnalysis.moves.map((move, index) => {
+                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
+                              let evaluation = move.evaluation || 0;
+                              
+                              // Handle mate evaluations
+                              if (Math.abs(evaluation) > 5000) {
+                                evaluation = evaluation > 0 ? 1000 : -1000;
+                              }
+                              
+                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
+                              const y = 50 - (clampedEval / 1000) * 50;
+                              return `${x}%,${Math.max(50, y)}%`;
+                            }).join(' ')} 100%,50%`}
+                            fill="url(#blackAdvantage)"
+                          />
+                        </svg>
+                        
+                        {/* Y-axis labels */}
+                        <div className="absolute left-1 top-2 text-xs text-green-600 font-medium">+10</div>
+                        <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">0</div>
+                        <div className="absolute left-1 bottom-2 text-xs text-red-600 font-medium">-10</div>
+                        
+                        {/* Legend */}
+                        <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-500 rounded"></div>
+                            <span>White Advantage</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-red-500 rounded"></div>
+                            <span>Black Advantage</span>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Stockfish engine evaluation in centipawns (100 centipawns = 1 pawn advantage). 
+                        Positive values favor White, negative values favor Black. Mate positions are capped at ±10 pawns for visualization.
+                      </p>
+                    </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
-                      <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No significant mistakes found in this game!</p>
+                      <p>No move evaluation data available for centipawn chart.</p>
+                      <p className="text-xs mt-2">
+                        Total moves: {gameAnalysis.moves?.length || 0}, 
+                        Has evaluation data: {gameAnalysis.moves?.some(m => m.evaluation !== undefined) ? 'Yes' : 'No'}
+                      </p>
                     </div>
                   )}
                 </TabsContent>
+
+
 
                 <TabsContent value="moments" className="space-y-3">
                   {gameAnalysis.criticalMoments && gameAnalysis.criticalMoments.length > 0 ? (

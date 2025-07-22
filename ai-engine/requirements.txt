@@ -5,4 +5,5 @@ pydantic==2.5.3
 requests>=2.32.3,<3.0.0
 openai==1.6.1
 python-dotenv==1.0.0
-httpx==0.24.1 
+httpx==0.24.1
+python-chess==1.999.0 

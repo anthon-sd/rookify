@@ -73,14 +73,19 @@ export const getGameAnalysis = async (gameId: string) => {
 
     console.log('Parsed key moments:', keyMoments);
 
-    // Transform key moments into moves array for the Mistakes tab
+    // Transform key moments into moves array with Stockfish evaluations
     const moves = keyMoments.map((moment: any) => ({
       move: moment.move || `Move ${moment.move_number}`,
-      evaluation: moment.delta_cp || 0,
+      evaluation: moment.eval_score !== undefined ? moment.eval_score : 0, // Use Stockfish evaluation, not delta
       accuracy: moment.accuracy_class?.toLowerCase() || 'good',
       comment: moment.description || moment.comment || '',
       moveNumber: moment.move_number || 0
     }));
+
+    // Log evaluation data for debugging
+    console.log('🎯 Stockfish evaluations for centipawn chart:', 
+      moves.map(m => ({ move: m.moveNumber, evaluation: m.evaluation })).slice(0, 10)
+    );
 
     // Filter critical moments to only show significant ones (mistakes, blunders, brilliant moves)
     const significantMoments = keyMoments.filter((moment: any) => {

@@ -5,6 +5,9 @@ from typing import Optional, List, Dict
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 import json
+import chess
+import chess.engine
+import re
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -152,6 +155,324 @@ def get_analysis_threshold(user_rating: int) -> Dict:
             'focus_on': ['Blunder', 'Miss', 'Mistake', 'Inaccuracy', 'Brilliant', 'Great']
         }
 
+def extract_comprehensive_analysis(engine: Stockfish, fen: str, move_context: Optional[Dict] = None) -> Dict:
+    """Extract comprehensive analysis data from Stockfish for enhanced vector schema"""
+    
+    analysis = {}
+    
+    try:
+        # Create chess board for additional analysis
+        board = chess.Board(fen)
+        
+        # Position complexity metrics
+        analysis['material_balance'] = calculate_material_balance(board)
+        analysis['piece_activity'] = calculate_piece_activity(board)
+        analysis['king_safety'] = calculate_king_safety(board, engine)
+        analysis['pawn_structure'] = calculate_pawn_structure(board)
+        analysis['center_control'] = calculate_center_control(board)
+        analysis['position_complexity'] = calculate_position_complexity(board, engine)
+        analysis['tactical_complexity'] = calculate_tactical_complexity(board)
+        analysis['threats_count'] = count_threats(board)
+        analysis['hanging_pieces'] = find_hanging_pieces(board)
+        
+        # Enhanced evaluation data
+        evaluation = engine.get_evaluation()
+        analysis['winning_probability'] = eval_to_win_probability(evaluation)
+        analysis['drawing_probability'] = eval_to_draw_probability(evaluation)
+        analysis['sharpness_score'] = calculate_sharpness(board, engine)
+        analysis['eval_volatility'] = calculate_eval_volatility(board, engine)
+        
+        # Get multi-PV lines for best continuation
+        analysis['best_continuation'] = get_best_continuation(engine)
+        
+        # Tactical pattern detection
+        analysis['tactical_motifs'] = detect_tactical_motifs(board)
+        analysis['positional_themes'] = detect_positional_themes(board)
+        analysis['threat_patterns'] = detect_threat_patterns(board)
+        analysis['defensive_resources'] = detect_defensive_resources(board)
+        
+        # Historical context
+        analysis['novelty_score'] = calculate_novelty_score(board)
+        analysis['position_frequency'] = estimate_position_frequency(fen)
+        
+    except Exception as e:
+        logging.error(f"Error in comprehensive analysis: {e}")
+        # Return defaults if analysis fails
+        analysis = {
+            'material_balance': 0.0,
+            'piece_activity': 0.5,
+            'king_safety': 0.5,
+            'pawn_structure': 0.5,
+            'center_control': 0.5,
+            'position_complexity': 0.5,
+            'tactical_complexity': 0.5,
+            'threats_count': 0,
+            'hanging_pieces': [],
+            'winning_probability': 0.5,
+            'drawing_probability': 0.0,
+            'sharpness_score': 0.0,
+            'eval_volatility': 0.0,
+            'best_continuation': [],
+            'tactical_motifs': [],
+            'positional_themes': [],
+            'threat_patterns': [],
+            'defensive_resources': [],
+            'novelty_score': 0.0,
+            'position_frequency': 0.0
+        }
+    
+    return analysis
+
+def calculate_material_balance(board: chess.Board) -> float:
+    """Calculate material balance (positive favors white)"""
+    piece_values = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
+    
+    white_material = sum(len(board.pieces(piece_type, chess.WHITE)) * value 
+                        for piece_type, value in piece_values.items())
+    black_material = sum(len(board.pieces(piece_type, chess.BLACK)) * value 
+                        for piece_type, value in piece_values.items())
+    
+    return white_material - black_material
+
+def calculate_piece_activity(board: chess.Board) -> float:
+    """Calculate piece activity score (0-1)"""
+    mobility = len(list(board.legal_moves))
+    # Normalize by typical move count
+    return min(1.0, mobility / 40.0)
+
+def calculate_king_safety(board: chess.Board, engine: Stockfish) -> float:
+    """Calculate king safety score (0-1)"""
+    # Simple heuristic based on king position and surrounding pawns
+    king_square = board.king(board.turn)
+    if king_square is None:
+        return 0.0
+    
+    # Check if king is castled (rough approximation)
+    king_file = chess.square_file(king_square)
+    castled = king_file < 3 or king_file > 5  # Likely castled if on a/b/c or f/g/h files
+    
+    # Count pawn shield
+    pawn_shield = 0
+    king_rank = chess.square_rank(king_square)
+    for file_offset in [-1, 0, 1]:
+        shield_file = king_file + file_offset
+        if 0 <= shield_file <= 7:
+            shield_square = chess.square(shield_file, king_rank + (1 if board.turn else -1))
+            if board.piece_at(shield_square) and board.piece_at(shield_square).piece_type == chess.PAWN:
+                pawn_shield += 1
+    
+    safety_score = (0.3 if castled else 0.0) + (pawn_shield * 0.2)
+    return min(1.0, safety_score)
+
+def calculate_pawn_structure(board: chess.Board) -> float:
+    """Calculate pawn structure quality (0-1)"""
+    # Count doubled, isolated, and passed pawns
+    white_pawns = board.pieces(chess.PAWN, chess.WHITE)
+    black_pawns = board.pieces(chess.PAWN, chess.BLACK)
+    
+    score = 0.5  # Base score
+    
+    # Penalize doubled pawns
+    for file in range(8):
+        white_count = len([sq for sq in white_pawns if chess.square_file(sq) == file])
+        black_count = len([sq for sq in black_pawns if chess.square_file(sq) == file])
+        if white_count > 1:
+            score -= 0.05 * (white_count - 1)
+        if black_count > 1:
+            score -= 0.05 * (black_count - 1)
+    
+    return max(0.0, min(1.0, score))
+
+def calculate_center_control(board: chess.Board) -> float:
+    """Calculate center control score (0-1)"""
+    center_squares = [chess.E4, chess.E5, chess.D4, chess.D5]
+    controlled = sum(1 for sq in center_squares if board.is_attacked_by(board.turn, sq))
+    return controlled / 4.0
+
+def calculate_position_complexity(board: chess.Board, engine: Stockfish) -> float:
+    """Calculate overall position complexity (0-1)"""
+    total_pieces = len(board.piece_map())
+    legal_moves = len(list(board.legal_moves))
+    
+    # Normalize complexity
+    piece_factor = min(1.0, total_pieces / 32.0)
+    move_factor = min(1.0, legal_moves / 40.0)
+    
+    return (piece_factor + move_factor) / 2.0
+
+def calculate_tactical_complexity(board: chess.Board) -> float:
+    """Calculate tactical complexity (0-1)"""
+    # Count checks, captures, and threats
+    legal_moves = list(board.legal_moves)
+    tactical_moves = 0
+    
+    for move in legal_moves:
+        if board.is_capture(move):
+            tactical_moves += 1
+        
+        # Check if move gives check
+        board.push(move)
+        if board.is_check():
+            tactical_moves += 1
+        board.pop()
+    
+    return min(1.0, tactical_moves / len(legal_moves) if legal_moves else 0.0)
+
+def count_threats(board: chess.Board) -> int:
+    """Count number of threats in position"""
+    threats = 0
+    
+    # Count hanging pieces
+    for square in board.piece_map():
+        piece = board.piece_at(square)
+        if piece and piece.color != board.turn:
+            if board.is_attacked_by(board.turn, square):
+                threats += 1
+    
+    return threats
+
+def find_hanging_pieces(board: chess.Board) -> List[str]:
+    """Find hanging pieces"""
+    hanging = []
+    
+    for square in board.piece_map():
+        piece = board.piece_at(square)
+        if piece and piece.color != board.turn:
+            if board.is_attacked_by(board.turn, square) and not board.is_attacked_by(piece.color, square):
+                hanging.append(chess.square_name(square))
+    
+    return hanging
+
+def eval_to_win_probability(evaluation: Dict) -> float:
+    """Convert centipawn evaluation to win probability"""
+    if evaluation.get('type') == 'mate':
+        return 1.0 if evaluation.get('value', 0) > 0 else 0.0
+    
+    cp = evaluation.get('value', 0)
+    # Sigmoid function to convert centipawns to probability
+    return 1 / (1 + 10**(-cp/400))
+
+def eval_to_draw_probability(evaluation: Dict) -> float:
+    """Estimate draw probability based on evaluation"""
+    if evaluation.get('type') == 'mate':
+        return 0.0
+    
+    cp = abs(evaluation.get('value', 0))
+    # Higher draw probability for positions close to 0.00
+    return max(0.0, 0.4 - (cp / 200))
+
+def calculate_sharpness(board: chess.Board, engine: Stockfish) -> float:
+    """Calculate position sharpness (0-1)"""
+    # Positions with many captures, checks, and tactical motifs are sharp
+    legal_moves = list(board.legal_moves)
+    sharp_moves = sum(1 for move in legal_moves if board.is_capture(move))
+    
+    return min(1.0, sharp_moves / max(1, len(legal_moves)))
+
+def calculate_eval_volatility(board: chess.Board, engine: Stockfish) -> float:
+    """Calculate evaluation volatility (simplified)"""
+    # For now, return based on position complexity
+    return calculate_tactical_complexity(board)
+
+def get_best_continuation(engine: Stockfish) -> List[str]:
+    """Get best continuation moves"""
+    try:
+        best_move = engine.get_best_move()
+        if best_move:
+            return [best_move]
+    except:
+        pass
+    return []
+
+def detect_tactical_motifs(board: chess.Board) -> List[str]:
+    """Detect tactical patterns in position"""
+    motifs = []
+    
+    # Simple pattern detection
+    legal_moves = list(board.legal_moves)
+    
+    # Look for forks, pins, skewers, etc.
+    for move in legal_moves:
+        board.push(move)
+        
+        # Check for fork (attacking multiple pieces)
+        attacked_pieces = []
+        for square in board.piece_map():
+            piece = board.piece_at(square)
+            if piece and piece.color != board.turn and board.is_attacked_by(board.turn, square):
+                attacked_pieces.append(square)
+        
+        if len(attacked_pieces) > 1:
+            motifs.append('fork')
+        
+        board.pop()
+        
+        # Only check first few moves to avoid timeout
+        if len(motifs) > 0:
+            break
+    
+    return list(set(motifs))
+
+def detect_positional_themes(board: chess.Board) -> List[str]:
+    """Detect positional themes"""
+    themes = []
+    
+    # Detect weak squares, outposts, etc.
+    if len(board.pieces(chess.KNIGHT, chess.WHITE)) > 0:
+        themes.append('knight_activity')
+    
+    if len(board.pieces(chess.BISHOP, chess.WHITE)) > len(board.pieces(chess.BISHOP, chess.BLACK)):
+        themes.append('bishop_pair')
+    
+    return themes
+
+def detect_threat_patterns(board: chess.Board) -> List[str]:
+    """Detect threat patterns"""
+    threats = []
+    
+    if board.is_check():
+        threats.append('check')
+    
+    # Look for back rank weakness
+    king_square = board.king(not board.turn)
+    if king_square and chess.square_rank(king_square) in [0, 7]:
+        threats.append('back_rank')
+    
+    return threats
+
+def detect_defensive_resources(board: chess.Board) -> List[str]:
+    """Detect defensive resources"""
+    resources = []
+    
+    # Count escape squares for king
+    king_square = board.king(board.turn)
+    if king_square:
+        escape_squares = 0
+        for direction in [-9, -8, -7, -1, 1, 7, 8, 9]:
+            target = king_square + direction
+            if 0 <= target < 64 and not board.is_attacked_by(not board.turn, target):
+                escape_squares += 1
+        
+        if escape_squares > 2:
+            resources.append('king_mobility')
+    
+    return resources
+
+def calculate_novelty_score(board: chess.Board) -> float:
+    """Calculate position novelty (simplified)"""
+    # For now, return based on piece count (fewer pieces = more novel endgame)
+    total_pieces = len(board.piece_map())
+    return max(0.0, 1.0 - (total_pieces / 32.0))
+
+def estimate_position_frequency(fen: str) -> float:
+    """Estimate how common this position is (simplified)"""
+    # Very basic heuristic - could be enhanced with actual database lookups
+    piece_count = fen.count('r') + fen.count('n') + fen.count('b') + fen.count('q') + \
+                 fen.count('R') + fen.count('N') + fen.count('B') + fen.count('Q')
+    
+    # More pieces = more common (opening/middlegame)
+    return min(1.0, piece_count / 20.0)
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -176,7 +497,7 @@ def create_app() -> Flask:
     )
 
     def analyze_single_position(position_req: PositionRequest, pool: StockfishPool) -> Dict:
-        """Analyze a single position using Stockfish pool"""
+        """Analyze a single position using Stockfish pool with comprehensive data extraction"""
         engine = pool.acquire()
         try:
             # Set position
@@ -184,16 +505,20 @@ def create_app() -> Flask:
             depth = position_req.depth or 20
             engine.set_depth(depth)
             
-            # Get evaluation and best move
+            # Get comprehensive Stockfish analysis
             evaluation = engine.get_evaluation()
             best_move = engine.get_best_move()
+            
+            # Extract enhanced Stockfish data
+            enhanced_data = extract_comprehensive_analysis(engine, position_req.fen, position_req.move_context)
             
             result = {
                 'position_id': position_req.position_id,
                 'evaluation': evaluation,
                 'best_move': best_move,
                 'fen': position_req.fen,
-                'depth': depth
+                'depth': depth,
+                'enhanced_analysis': enhanced_data
             }
             
             # Add LLM analysis if criteria met

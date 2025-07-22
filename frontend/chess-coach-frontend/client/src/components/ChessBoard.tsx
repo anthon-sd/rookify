@@ -25,15 +25,24 @@ interface CriticalMoment {
   move?: string
 }
 
+interface Move {
+  move: string
+  evaluation: number
+  accuracy: string
+  comment?: string
+  moveNumber: number
+}
+
 interface ChessBoardProps {
   pgn: string
   criticalMoments?: CriticalMoment[]
   userColor?: 'white' | 'black'
   className?: string
   moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
+  moves?: Move[]
 }
 
-export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', className, moveAccuracyData = [] }: ChessBoardProps) {
+export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', className, moveAccuracyData = [], moves = [] }: ChessBoardProps) {
   const [game, setGame] = useState(new Chess())
   const [gameHistory, setGameHistory] = useState<string[]>([])
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
@@ -344,58 +353,92 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
           <CardContent>
             <ScrollArea className="h-[400px]" ref={moveListRef}>
               <div className="space-y-1">
-                {formatMovesForDisplay().map((movePair) => (
-                  <div key={movePair.moveNumber} className="flex items-center gap-1 text-sm">
-                    {/* Move number */}
-                    <span className="text-muted-foreground w-8 text-right">
-                      {movePair.moveNumber}.
-                    </span>
+                {formatMovesForDisplay().map((movePair) => {
+                  // Find evaluation data for white and black moves
+                  const whiteEval = moves.find(m => m.moveNumber === (movePair.whiteIndex + 1) && (movePair.whiteIndex % 2 === 0))?.evaluation || 0;
+                  const blackEval = moves.find(m => m.moveNumber === (movePair.blackIndex + 1) && (movePair.blackIndex % 2 === 1))?.evaluation || 0;
+                  
+                  const formatEval = (evaluation: number) => {
+                    if (Math.abs(evaluation) > 5000) {
+                      return evaluation > 0 ? 'M+' : 'M-';
+                    }
+                    const pawns = evaluation / 100;
+                    return pawns >= 0 ? `+${pawns.toFixed(1)}` : pawns.toFixed(1);
+                  };
 
-                    {/* White move */}
-                    <button
-                      data-move-index={movePair.whiteIndex}
-                      onClick={() => goToMove(movePair.whiteIndex)}
-                      className={cn(
-                        'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
-                        'focus:outline-none focus:ring-0',
-                        getMoveAccuracyStyle(movePair.whiteIndex),
-                        isCriticalMoment(movePair.whiteIndex) && 'ring-2 ring-yellow-400'
-                      )}
-                      style={{
-                        border: currentMoveIndex === movePair.whiteIndex 
-                          ? '3px solid #000000' 
-                          : '3px solid transparent',
-                        outline: 'none',
-                        boxShadow: 'none'
-                      }}
-                    >
-                      {movePair.white}
-                    </button>
+                  return (
+                    <div key={movePair.moveNumber} className="flex items-center gap-1 text-sm">
+                      {/* Move number */}
+                      <span className="text-muted-foreground w-8 text-right">
+                        {movePair.moveNumber}.
+                      </span>
 
-                    {/* Black move */}
-                    {movePair.black && (
-                      <button
-                        data-move-index={movePair.blackIndex}
-                        onClick={() => goToMove(movePair.blackIndex)}
-                        className={cn(
-                          'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
-                          'focus:outline-none focus:ring-0',
-                          getMoveAccuracyStyle(movePair.blackIndex),
-                          isCriticalMoment(movePair.blackIndex) && 'ring-2 ring-yellow-400'
+                      {/* White move */}
+                      <div className="flex flex-col items-start">
+                        <button
+                          data-move-index={movePair.whiteIndex}
+                          onClick={() => goToMove(movePair.whiteIndex)}
+                          className={cn(
+                            'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
+                            'focus:outline-none focus:ring-0',
+                            getMoveAccuracyStyle(movePair.whiteIndex),
+                            isCriticalMoment(movePair.whiteIndex) && 'ring-2 ring-yellow-400'
+                          )}
+                          style={{
+                            border: currentMoveIndex === movePair.whiteIndex 
+                              ? '3px solid #000000' 
+                              : '3px solid transparent',
+                            outline: 'none',
+                            boxShadow: 'none'
+                          }}
+                        >
+                          {movePair.white}
+                        </button>
+                        {whiteEval !== 0 && (
+                          <span className={cn(
+                            "text-xs px-1 rounded font-mono",
+                            whiteEval > 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                          )}>
+                            {formatEval(whiteEval)}
+                          </span>
                         )}
-                        style={{
-                          border: currentMoveIndex === movePair.blackIndex 
-                            ? '3px solid #000000' 
-                            : '3px solid transparent',
-                          outline: 'none',
-                          boxShadow: 'none'
-                        }}
-                      >
-                        {movePair.black}
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      </div>
+
+                      {/* Black move */}
+                      {movePair.black && (
+                        <div className="flex flex-col items-start">
+                          <button
+                            data-move-index={movePair.blackIndex}
+                            onClick={() => goToMove(movePair.blackIndex)}
+                            className={cn(
+                              'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
+                              'focus:outline-none focus:ring-0',
+                              getMoveAccuracyStyle(movePair.blackIndex),
+                              isCriticalMoment(movePair.blackIndex) && 'ring-2 ring-yellow-400'
+                            )}
+                            style={{
+                              border: currentMoveIndex === movePair.blackIndex 
+                                ? '3px solid #000000' 
+                                : '3px solid transparent',
+                              outline: 'none',
+                              boxShadow: 'none'
+                            }}
+                          >
+                            {movePair.black}
+                          </button>
+                          {blackEval !== 0 && (
+                            <span className={cn(
+                              "text-xs px-1 rounded font-mono",
+                              blackEval > 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                            )}>
+                              {formatEval(blackEval)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </ScrollArea>
 

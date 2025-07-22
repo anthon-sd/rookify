@@ -78,6 +78,77 @@ def create_rookify_index():
     is_brilliant       bool      Whether the move was classified as brilliant
     is_great           bool      Whether the move was classified as great
     game_url           string    URL to the original game on chess platform
+    
+    # Enhanced Move Features
+    piece_moved        string    Type of piece that moved (e.g., 'knight', 'pawn')
+    move_type          string    Type of move: capture/check/castle/promotion/quiet
+    is_check           bool      Whether the move gives check
+    is_capture         bool      Whether the move captures a piece
+    is_castle          bool      Whether the move is castling
+    is_promotion       bool      Whether the move promotes a pawn
+    attacked_piece     string    Type of piece captured (if applicable)
+    from_square        string    Source square of the move (e.g., 'e2')
+    to_square          string    Destination square of the move (e.g., 'e4')
+    move_distance      int       Number of squares the piece traveled
+    
+    # Position Complexity Metrics
+    material_balance   float     Material count difference (positive favors white)
+    king_safety_score  float     King safety metric (0-1 scale)
+    pawn_structure_score float   Quality of pawn structure (0-1 scale)
+    piece_activity_score float   How active the pieces are (0-1 scale)
+    center_control_score float   Central square control (0-1 scale)
+    position_complexity float    Overall position complexity (0-1 scale)
+    tactical_complexity float    Tactical richness of position (0-1 scale)
+    threats_count      int       Number of threats in the position
+    hanging_pieces     string    JSON array of undefended pieces
+    
+    # Time Management Data
+    time_spent         float     Seconds spent on this move
+    time_remaining     float     Seconds remaining after the move
+    time_pressure      bool      Whether player was in time pressure (<60s)
+    avg_time_per_move  float     Running average time per move
+    time_percentile    float     Time usage compared to similar positions (0-1)
+    clock_percentage_used float  Percentage of total time used for this move
+    
+    # Enhanced Pattern Recognition
+    tactical_motifs    string    JSON array of detected tactical patterns
+    positional_themes  string    JSON array of strategic themes
+    mistake_pattern    string    Specific type of mistake made
+    threat_patterns    string    JSON array of threat patterns
+    defensive_resources string   JSON array of available defensive options
+    
+    # Learning Analytics
+    improvement_priority float   Priority for study/improvement (1-10 scale)
+    concept_tags       string    JSON array of learning concepts
+    difficulty_score   float     Position difficulty for the user (0-1 scale)
+    critical_moment    bool      Whether this is a key decision point
+    learning_opportunity string  Specific learning focus area
+    similar_position_count int   Number of similar positions in database
+    
+    # Historical Context
+    moves_since_theory int       Moves since leaving opening theory
+    previous_move      string    The move that preceded this one
+    position_frequency float     How common this position is (0-1 scale)
+    novelty_score      float     How unusual the position is (0-1 scale)
+    opening_deviation  bool      Whether player left the main opening line
+    transition_move    bool      Whether this move transitions game phases
+    
+    # Enhanced Evaluation Data
+    eval_before        float     Position evaluation before the move (centipawns)
+    eval_after         float     Position evaluation after the move (centipawns)
+    winning_probability float    Win probability after the move (0-1 scale)
+    drawing_probability float    Draw probability after the move (0-1 scale)
+    sharpness_score    float     How critical/sharp the position is (0-1 scale)
+    eval_volatility    float     How much the evaluation is changing
+    best_continuation  string    JSON array of best moves from position
+    
+    # Personalization Hooks
+    user_pattern_frequency float How often user encounters this pattern type (0-1)
+    user_success_rate  float     User's success rate in similar positions (0-1)
+    typical_user_mistake bool    Whether this is a common error for this user
+    personalized_difficulty float Difficulty adjusted for user level (0-1)
+    improvement_delta  float     User's progress on this pattern type
+    last_seen_days_ago int       Days since user last encountered similar position
     """)
 
 def verify_index_configuration():
