@@ -17,14 +17,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface CriticalMoment {
-  moveNumber: number
-  type: string
-  description: string
-  delta_cp?: number
-  move?: string
-}
-
 interface Move {
   move: string
   evaluation: number
@@ -35,14 +27,13 @@ interface Move {
 
 interface ChessBoardProps {
   pgn: string
-  criticalMoments?: CriticalMoment[]
   userColor?: 'white' | 'black'
   className?: string
   moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
   moves?: Move[]
 }
 
-export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', className, moveAccuracyData = [], moves = [] }: ChessBoardProps) {
+export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyData = [], moves = [] }: ChessBoardProps) {
   const [game, setGame] = useState(new Chess())
   const [gameHistory, setGameHistory] = useState<string[]>([])
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
@@ -170,28 +161,29 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
 
     // Use the same logic as the "Accuracy Throughout Game" section
     switch (moveData.type) {
-      case 'blunder':
-        return 'bg-red-600 text-white'
-      case 'mistake':
-      case 'miss':
-        return 'bg-orange-500 text-white'
-      case 'inaccuracy':
-        return 'bg-yellow-500 text-white'
-      case 'brilliant':
+      case 'Brilliant':
         return 'bg-cyan-500 text-white'
-      case 'great':
+      case 'Best':
+        return 'bg-green-800 text-white'
+      case 'Great':
         return 'bg-green-500 text-white'
-      case 'good':
-        return 'bg-green-400 text-white'
+      case 'Balanced':
+        return 'bg-green-300 text-white'
+      case 'Book':
+        return 'bg-amber-700 text-white'
+      case 'Forced':
+        return 'bg-gray-500 text-white'
+      case 'Inaccuracy':
+        return 'bg-yellow-500 text-white'
+      case 'Mistake':
+        return 'bg-orange-500 text-white'
+      case 'Blunder':
+        return 'bg-red-600 text-white'
+      case 'Checkmate':
+        return 'bg-black text-white'
       default:
-        return 'bg-green-400 text-white'
+        return 'bg-gray-400 text-white'
     }
-  }
-
-  // Check if move is a critical moment
-  const isCriticalMoment = (moveIndex: number) => {
-    const moveNumber = Math.floor(moveIndex / 2) + 1
-    return criticalMoments.some(moment => moment.moveNumber === moveNumber)
   }
 
   // Format moves for display
@@ -381,8 +373,7 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
                           className={cn(
                             'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
                             'focus:outline-none focus:ring-0',
-                            getMoveAccuracyStyle(movePair.whiteIndex),
-                            isCriticalMoment(movePair.whiteIndex) && 'ring-2 ring-yellow-400'
+                            getMoveAccuracyStyle(movePair.whiteIndex)
                           )}
                           style={{
                             border: currentMoveIndex === movePair.whiteIndex 
@@ -413,8 +404,7 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
                             className={cn(
                               'px-2 py-1 rounded text-left min-w-[60px] transition-colors',
                               'focus:outline-none focus:ring-0',
-                              getMoveAccuracyStyle(movePair.blackIndex),
-                              isCriticalMoment(movePair.blackIndex) && 'ring-2 ring-yellow-400'
+                              getMoveAccuracyStyle(movePair.blackIndex)
                             )}
                             style={{
                               border: currentMoveIndex === movePair.blackIndex 
@@ -445,18 +435,30 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
             {/* Move Legend */}
             <div className="mt-4 pt-4 border-t space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Move Quality:</p>
-              <div className="grid grid-cols-2 gap-1 text-xs">
+              <div className="grid grid-cols-3 gap-1 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-cyan-500 rounded"></div>
                   <span>Brilliant</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-green-800 rounded"></div>
+                  <span>Best</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-green-500 rounded"></div>
                   <span>Great</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-green-400 rounded"></div>
-                  <span>Good</span>
+                  <div className="w-3 h-3 bg-green-300 rounded"></div>
+                  <span>Balanced</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-amber-700 rounded"></div>
+                  <span>Book</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-gray-500 rounded"></div>
+                  <span>Forced</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-yellow-500 rounded"></div>
@@ -469,10 +471,6 @@ export function ChessBoard({ pgn, criticalMoments = [], userColor = 'white', cla
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-red-600 rounded"></div>
                   <span>Blunder</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 border-2 border-yellow-400 rounded"></div>
-                  <span>Critical</span>
                 </div>
               </div>
             </div>

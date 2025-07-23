@@ -217,7 +217,7 @@ def extract_pattern_data_from_analysis(moment: Dict, enhanced_before: Dict, enha
     
     # Identify mistake patterns based on accuracy
     accuracy_class = moment.get('accuracy_class', '').lower()
-    if accuracy_class in ['mistake', 'blunder', 'miss']:
+    if accuracy_class in ['mistake', 'blunder']:
         patterns['mistake_pattern'] = f"{accuracy_class}_move"
     
     # Add patterns from commentary as fallback
@@ -250,8 +250,6 @@ def calculate_learning_metrics(moment: Dict, user_rating: int) -> Dict:
     elif accuracy_class == 'mistake':
         metrics['improvement_priority'] = 8.0
         metrics['critical_moment'] = True
-    elif accuracy_class == 'miss':
-        metrics['improvement_priority'] = 7.0
     
     # Learning opportunity based on skill category
     skill_category = moment.get('skill_category', '')
@@ -430,7 +428,7 @@ def prepare_vector_from_supabase_game(game_data: Dict, moment: Dict, moment_inde
         'eco_code': game_data.get('eco_code', ''),
         'is_tactical_puzzle': bool(moment.get('is_tactical_puzzle', False)),
         'is_brilliant': bool(moment.get('is_brilliant', False)),
-        'is_great': bool(moment.get('is_great', False)),
+        'is_great': bool(moment.get('accuracy_class') == 'Great'),
         'game_url': game_data.get('game_url', ''),
         'supabase_game_id': str(game_data.get('id', '')),
         

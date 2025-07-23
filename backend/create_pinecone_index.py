@@ -66,7 +66,8 @@ def create_rookify_index():
     eval_score         float     Stockfish evaluation of the position after the move (in centipawns)
     stockfish_best     string    The best move according to Stockfish
     delta_cp           float     Difference in centipawns between best move and actual move
-    accuracy_class     string    "best", "excellent", "good", "inaccuracy", "mistake", "blunder"
+    accuracy_class     string    "brilliant", "best", "great", "balanced", "book", "forced", "inaccuracy", "mistake", "blunder"
+                                    - forced: moves required to maintain evaluation or when very limited legal options exist
     phase              string    "opening", "middlegame", "endgame"
     skill_category     string    One of the major areas: "Openings", "Tactics", "Strategy", "Endgames", "Time Management"
     sub_skill          string    Specific theme or concept: "Forks", "Pins", "Pawn Structure", "King Safety"
@@ -76,7 +77,7 @@ def create_rookify_index():
     eco_code           string    Opening classification (e.g., "B20")
     is_tactical_puzzle bool      Whether the position could be used as a training puzzle
     is_brilliant       bool      Whether the move was classified as brilliant
-    is_great           bool      Whether the move was classified as great
+    is_great           bool      Whether the move was classified as great (accuracy_class == "Great")
     game_url           string    URL to the original game on chess platform
     
     # Enhanced Move Features

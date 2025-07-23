@@ -217,7 +217,7 @@ def enhance_game_data(game_data: Dict) -> Dict:
                 accuracy_class = moment.get('accuracy_class', '').lower()
                 if 'blunder' in accuracy_class:
                     blunders += 1
-                elif 'mistake' in accuracy_class or 'miss' in accuracy_class:
+                elif 'mistake' in accuracy_class:
                     mistakes += 1
                 elif 'inaccuracy' in accuracy_class:
                     inaccuracies += 1

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, Star } from "lucide-react"
+import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle } from "lucide-react"
 import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 import { ChessBoard } from "@/components/ChessBoard"
@@ -26,7 +26,6 @@ interface Game {
 
 interface GameAnalysis {
   moves: Array<{ move: string, evaluation: number, accuracy: string, comment?: string, moveNumber: number }>
-  criticalMoments: Array<{ moveNumber: number, type: string, description: string, delta_cp?: number, move?: string }>
   summary: { accuracy: number, mistakes: number, blunders: number, brilliantMoves: number }
   coachNotes: string
   moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
@@ -200,19 +199,6 @@ export function Analyze() {
     return "text-red-600"
   }
 
-  const getMomentIcon = (type: string) => {
-    switch (type) {
-      case 'brilliant':
-        return <Star className="h-4 w-4 text-yellow-500" />
-      case 'blunder':
-        return <AlertCircle className="h-4 w-4 text-red-500" />
-      case 'mistake':
-        return <AlertCircle className="h-4 w-4 text-orange-500" />
-      default:
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -340,7 +326,6 @@ export function Analyze() {
                 <TabsContent value="board" className="space-y-4">
                   <ChessBoard 
                     pgn={gameAnalysis.pgn || selectedGame?.pgn || ''}
-                    criticalMoments={gameAnalysis.criticalMoments}
                     userColor={getUserColor(gameAnalysis)}
                     moveAccuracyData={gameAnalysis.moveAccuracyData}
                     moves={gameAnalysis.moves}
@@ -372,23 +357,29 @@ export function Analyze() {
                     {gameAnalysis.moveAccuracyData && gameAnalysis.moveAccuracyData.length > 0 ? (
                       <div className="space-y-2">
                         <div className="grid grid-cols-10 gap-1 mb-2">
-                          {gameAnalysis.moveAccuracyData.map((moveData, index) => (
-                            <div
-                              key={index}
-                              className={`h-6 rounded text-xs flex items-center justify-center text-white font-bold ${
-                                moveData.type === 'blunder' ? 'bg-red-600' :
-                                moveData.type === 'mistake' || moveData.type === 'miss' ? 'bg-orange-500' :
-                                moveData.type === 'inaccuracy' ? 'bg-yellow-500' :
-                                moveData.type === 'brilliant' ? 'bg-cyan-500' :
-                                moveData.type === 'great' ? 'bg-green-500' :
-                                moveData.type === 'good' ? 'bg-green-400' :
-                                'bg-green-400'
-                              }`}
-                              title={`Half-move ${index + 1}: ${moveData.accuracy}% (${moveData.type})`}
-                            >
-                              {Math.floor(index / 2) + 1}{index % 2 === 0 ? 'w' : 'b'}
-                            </div>
-                          ))}
+                          {gameAnalysis.moveAccuracyData.map((moveData, index) => {
+                            return (
+                              <div
+                                key={index}
+                                className={`h-6 rounded text-xs flex items-center justify-center text-white font-bold ${
+                                  moveData.type === 'Brilliant' ? 'bg-cyan-500' :
+                                  moveData.type === 'Best' ? 'bg-green-800' :
+                                  moveData.type === 'Great' ? 'bg-green-500' :
+                                  moveData.type === 'Balanced' ? 'bg-green-300' :
+                                  moveData.type === 'Book' ? 'bg-amber-700' :
+                                  moveData.type === 'Forced' ? 'bg-gray-500' :
+                                  moveData.type === 'Inaccuracy' ? 'bg-yellow-500' :
+                                  moveData.type === 'Mistake' ? 'bg-orange-500' :
+                                  moveData.type === 'Blunder' ? 'bg-red-600' :
+                                  moveData.type === 'Checkmate' ? 'bg-black' :
+                                  'bg-gray-400'
+                                }`}
+                                title={`Half-move ${index + 1}: ${moveData.accuracy}% (${moveData.type})`}
+                              >
+                                {Math.floor(index / 2) + 1}{index % 2 === 0 ? 'w' : 'b'}
+                              </div>
+                            );
+                          })}
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div className="flex items-center gap-1">
@@ -396,12 +387,24 @@ export function Analyze() {
                             <span>Brilliant</span>
                           </div>
                           <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-800 rounded"></div>
+                            <span>Best</span>
+                          </div>
+                          <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-green-500 rounded"></div>
                             <span>Great</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-400 rounded"></div>
-                            <span>Good</span>
+                            <div className="w-3 h-3 bg-green-300 rounded"></div>
+                            <span>Balanced</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-amber-700 rounded"></div>
+                            <span>Book</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-gray-500 rounded"></div>
+                            <span>Forced</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 bg-yellow-500 rounded"></div>
@@ -561,48 +564,10 @@ export function Analyze() {
 
 
                 <TabsContent value="moments" className="space-y-3">
-                  {gameAnalysis.criticalMoments && gameAnalysis.criticalMoments.length > 0 ? (
-                    gameAnalysis.criticalMoments.map((moment, index) => (
-                      <div 
-                        key={index} 
-                        className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                        onClick={() => {
-                          // Navigate to board tab and the specific move
-                          const boardTab = document.querySelector('[value="board"]') as HTMLElement;
-                          if (boardTab) {
-                            boardTab.click();
-                          }
-                          console.log('Navigate to move', moment.moveNumber, moment);
-                        }}
-                      >
-                        {getMomentIcon(moment.type)}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">Move {moment.moveNumber}</span>
-                            {moment.move && (
-                              <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {moment.move}
-                              </span>
-                            )}
-                            <Badge variant={moment.type === 'blunder' ? 'destructive' : moment.type === 'brilliant' ? 'default' : 'secondary'}>
-                              {moment.type}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{moment.description}</p>
-                          {moment.delta_cp && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Evaluation change: {moment.delta_cp > 0 ? '+' : ''}{moment.delta_cp} centipawns
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No critical moments identified in this game.</p>
-                    </div>
-                  )}
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Critical moments classification has been removed.</p>
+                    <p>Use the Board tab to review your moves.</p>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="coach" className="space-y-4">

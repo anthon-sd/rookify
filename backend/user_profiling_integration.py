@@ -36,7 +36,7 @@ class UserProfiler:
             # Query user's recent mistake patterns from vector DB
             filter_conditions = {
                 'user_id': user_id,
-                'accuracy_class': {'$in': ['mistake', 'blunder', 'miss']}
+                'accuracy_class': {'$in': ['mistake', 'blunder']}
             }
             
             # Search for patterns in user's mistakes

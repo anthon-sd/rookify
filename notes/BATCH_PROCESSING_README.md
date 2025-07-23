@@ -24,8 +24,7 @@ The system now intelligently decides when to call OpenAI based on:
 ### Always Analyze (High Value Positions):
 - **Brilliant** moves - Exceptional plays worth learning from
 - **Great** moves - Above-average plays with teaching value
-- **Blunder** moves - Major mistakes requiring explanation
-- **Miss** moves - Significant errors needing guidance
+- **Blunder** moves - Critical errors requiring immediate attention
 
 ### Sometimes Analyze (Based on User Level):
 - **Mistakes** - Limited per game based on user rating

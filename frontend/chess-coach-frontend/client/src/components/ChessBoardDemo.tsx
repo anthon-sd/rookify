@@ -38,38 +38,6 @@ const sampleMoves = [
   { move: 'cxd4', evaluation: -2.5, accuracy: 'blunder', moveNumber: 9 },
 ]
 
-// Sample critical moments
-const sampleCriticalMoments = [
-  {
-    moveNumber: 8,
-    type: 'brilliant',
-    description: 'Excellent tactical shot! Qxg7 wins material and creates a powerful attack.',
-    delta_cp: 150,
-    move: 'Qxg7'
-  },
-  {
-    moveNumber: 8,
-    type: 'mistake',
-    description: 'Rg8 allows White to continue the attack. Better was Kf8.',
-    delta_cp: -180,
-    move: 'Rg8'
-  },
-  {
-    moveNumber: 9,
-    type: 'brilliant',
-    description: 'Another brilliant move! The h7 pawn capture maintains the attack.',
-    delta_cp: 200,
-    move: 'Qxh7'
-  },
-  {
-    moveNumber: 9,
-    type: 'blunder',
-    description: 'Major blunder! cxd4 ignores the mate threat. Kf8 was essential.',
-    delta_cp: -350,
-    move: 'cxd4'
-  }
-]
-
 export function ChessBoardDemo() {
   return (
     <div className="space-y-6">
@@ -93,7 +61,7 @@ export function ChessBoardDemo() {
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li><strong>Interactive Board:</strong> Click moves to navigate through the game</li>
               <li><strong>Keyboard Navigation:</strong> Use arrow keys, Home/End to navigate</li>
-              <li><strong>Move Quality:</strong> Color-coded moves showing brilliant, good, mistakes, and blunders</li>
+              <li><strong>Move Quality:</strong> Color-coded moves showing brilliant, best, great, balanced, mistakes, and blunders</li>
               <li><strong>Critical Moments:</strong> Special highlighting for key tactical moments</li>
               <li><strong>Board Controls:</strong> Flip board (F key), toggle coordinates, sound effects</li>
               <li><strong>Analysis Integration:</strong> Evaluation bars and engine analysis</li>
@@ -105,7 +73,6 @@ export function ChessBoardDemo() {
 
       <ChessBoard 
         pgn={samplePGN}
-        criticalMoments={sampleCriticalMoments}
         moveAccuracyData={sampleMoves.map(move => ({
           moveNumber: move.moveNumber,
           accuracy: move.evaluation * 100,
@@ -144,7 +111,7 @@ export function ChessBoardDemo() {
             </div>
             <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
               <div className="text-2xl font-bold text-green-600">14</div>
-              <div className="text-sm text-muted-foreground">Good Moves</div>
+              <div className="text-sm text-muted-foreground">Balanced Moves</div>
             </div>
             <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
               <div className="text-2xl font-bold text-orange-600">1</div>

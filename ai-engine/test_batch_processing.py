@@ -64,7 +64,7 @@ def test_batch_analysis():
             "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 0 4",
             "position_id": "pos_3",
             "move_context": {
-                "accuracy_class": "Good",
+                "accuracy_class": "Balanced",
                 "delta_cp": 25,
                 "phase": "opening",
                 "move_number": 4
@@ -167,7 +167,7 @@ def test_selective_criteria():
         {
             "name": "Endgame position (should use LLM)",
             "move_context": {
-                "accuracy_class": "Good",
+                "accuracy_class": "Balanced",
                 "delta_cp": 30,
                 "phase": "endgame",
                 "piece_count": 6
@@ -209,7 +209,7 @@ def test_performance_comparison():
             "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
             "position_id": f"perf_pos_{i}",
             "move_context": {
-                "accuracy_class": "Good" if i % 3 == 0 else "Best",
+                "accuracy_class": "Balanced",
                 "delta_cp": 50 if i % 3 == 0 else 10,
                 "phase": "opening"
             }

@@ -10,7 +10,7 @@
 - Always validate FEN/PGN input before processing
 - Use chess.Board for position manipulation
 - Store both engine evaluation and AI commentary
-- Classify moves: Brilliant, Great, Good, Inaccuracy, Mistake, Blunder
+- Classify moves: Brilliant, Best, Great, Balanced, Book, Forced, Inaccuracy, Mistake, Blunder
 
 ## Frontend Components
 - Use AuthContext for user state management

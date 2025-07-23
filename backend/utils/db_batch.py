@@ -195,7 +195,7 @@ def generate_analysis_summary(analyzed_moments: List[Dict], game_stats: Dict) ->
     accuracy = game_stats.get('avg_accuracy', 0)
     
     # Find the most critical moment
-    critical_moments = [m for m in analyzed_moments if m.get('accuracy_class', '').lower() in ['blunder', 'mistake', 'miss']]
+    critical_moments = [m for m in analyzed_moments if m.get('accuracy_class', '').lower() in ['blunder', 'mistake']]
     
     # Build summary
     summary_parts = []
@@ -416,7 +416,7 @@ def calculate_game_statistics(analyzed_moments) -> Dict:
             
             if 'blunder' in accuracy_class:
                 stats['blunders_count'] += 1
-            elif 'mistake' in accuracy_class or 'miss' in accuracy_class:
+            elif 'mistake' in accuracy_class:
                 stats['mistakes_count'] += 1
             elif 'inaccuracy' in accuracy_class:
                 stats['inaccuracies_count'] += 1

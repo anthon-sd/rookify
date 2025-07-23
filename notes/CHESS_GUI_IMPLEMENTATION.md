@@ -47,7 +47,7 @@ We have successfully integrated a high-quality chess GUI into the Rookify applic
    - Auto-scroll to current move
 
 3. **Move Analysis Integration**
-   - Color-coded move quality (brilliant, great, good, inaccuracy, mistake, blunder)
+   - Color-coded move quality (brilliant, best, great, balanced, inaccuracy, mistake, blunder)
    - Critical moment highlighting
    - Move evaluation display
    - Analysis comments integration

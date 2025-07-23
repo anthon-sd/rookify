@@ -152,7 +152,7 @@ POST /admin/vector-db/sync
      eval_score: -0.5,
      stockfish_best: "Nf3",
      delta_cp: 25,
-     accuracy_class: "good|mistake|blunder",
+     accuracy_class: "balanced|mistake|blunder",
      
      // Learning context
      skill_category: "Tactics|Strategy|Openings|Endgames",

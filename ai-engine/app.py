@@ -90,7 +90,7 @@ def should_get_llm_analysis(move_context: Dict, user_rating: int = 1500) -> bool
         return False
     
     # Always analyze these move types
-    critical_moves = ['Brilliant', 'Great', 'Mistake', 'Blunder', 'Miss', 'Inaccuracy']
+    critical_moves = ['Brilliant', 'Best', 'Great', 'Mistake', 'Blunder', 'Inaccuracy']
     accuracy_class = move_context.get('accuracy_class', '')
     if accuracy_class in critical_moves:
         return True
@@ -138,21 +138,21 @@ def get_analysis_threshold(user_rating: int) -> Dict:
             'delta_cp_threshold': 100,
             'max_mistakes_per_game': 3,
             'max_analyses_per_game': 5,
-            'focus_on': ['Blunder', 'Miss', 'Brilliant']
+            'focus_on': ['Blunder', 'Brilliant', 'Best']
         }
     elif user_rating < 1800:  # Intermediate
         return {
             'delta_cp_threshold': 50,
             'max_mistakes_per_game': 5,
             'max_analyses_per_game': 8,
-            'focus_on': ['Blunder', 'Miss', 'Mistake', 'Brilliant', 'Great']
+            'focus_on': ['Blunder', 'Mistake', 'Brilliant', 'Great', 'Best']
         }
     else:  # Advanced
         return {
             'delta_cp_threshold': 30,
             'max_mistakes_per_game': 7,
             'max_analyses_per_game': 10,
-            'focus_on': ['Blunder', 'Miss', 'Mistake', 'Inaccuracy', 'Brilliant', 'Great']
+            'focus_on': ['Blunder', 'Mistake', 'Inaccuracy', 'Brilliant', 'Great', 'Best']
         }
 
 def extract_comprehensive_analysis(engine: Stockfish, fen: str, move_context: Optional[Dict] = None) -> Dict:

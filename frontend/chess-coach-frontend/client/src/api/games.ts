@@ -77,7 +77,7 @@ export const getGameAnalysis = async (gameId: string) => {
     const moves = keyMoments.map((moment: any) => ({
       move: moment.move || `Move ${moment.move_number}`,
       evaluation: moment.eval_score !== undefined ? moment.eval_score : 0, // Use Stockfish evaluation, not delta
-      accuracy: moment.accuracy_class?.toLowerCase() || 'good',
+      accuracy: moment.accuracy_class || 'Balanced',
       comment: moment.description || moment.comment || '',
       moveNumber: moment.move_number || 0
     }));
@@ -87,29 +87,80 @@ export const getGameAnalysis = async (gameId: string) => {
       moves.map(m => ({ move: m.moveNumber, evaluation: m.evaluation })).slice(0, 10)
     );
 
-    // Filter critical moments to only show significant ones (mistakes, blunders, brilliant moves)
-    const significantMoments = keyMoments.filter((moment: any) => {
-      const accuracyClass = moment.accuracy_class?.toLowerCase() || '';
-      return ['blunder', 'mistake', 'miss', 'brilliant', 'great'].includes(accuracyClass);
-    });
-
     // Create move-by-move accuracy data for the chart
     const moveAccuracyData = keyMoments.map((moment: any, index: number) => {
-      const accuracyClass = moment.accuracy_class?.toLowerCase() || 'good';
-      let accuracyScore = 100;
+      // Check if this move is checkmate
+      const isCheckmate = (moment: any, index: number, allMoments: any[]): boolean => {
+        // Method 1: Check if move notation ends with '#'
+        if (moment.move && typeof moment.move === 'string' && moment.move.includes('#')) {
+          return true;
+        }
+        
+        // Method 2: Check if this is the last move and game ended decisively
+        const isLastMove = index === allMoments.length - 1;
+        if (isLastMove) {
+          // Check if game result indicates checkmate (not a draw)
+          const gameResult = gameData.result || '';
+          if (gameResult && (gameResult.includes('1-0') || gameResult.includes('0-1'))) {
+            return true;
+          }
+        }
+        
+        // Method 3: Check for explicit checkmate indicators in comments or description
+        const description = (moment.description || moment.comment || '').toLowerCase();
+        if (description.includes('checkmate') || description.includes('mate in') || description.includes('#')) {
+          return true;
+        }
+        
+        return false;
+      };
+
+      // Normalize accuracy_class to handle case sensitivity issues
+      const normalizeAccuracyClass = (rawClass: string, isCheckmateMove: boolean): string => {
+        // Checkmate moves override all other classifications
+        if (isCheckmateMove) {
+          return 'Checkmate';
+        }
+        
+        if (!rawClass) return 'Balanced';
+        
+        // Define the mapping from any case to proper title case
+        const classMap: { [key: string]: string } = {
+          'brilliant': 'Brilliant',
+          'best': 'Best', 
+          'great': 'Great',
+          'balanced': 'Balanced',
+          'book': 'Book',
+          'forced': 'Forced',
+          'inaccuracy': 'Inaccuracy',
+          'mistake': 'Mistake',
+          'blunder': 'Blunder'
+        };
+        
+        const normalized = classMap[rawClass.toLowerCase()];
+        if (!normalized) {
+          console.warn(`Unknown accuracy_class: "${rawClass}" - defaulting to Balanced`);
+          return 'Balanced';
+        }
+        
+        return normalized;
+      };
       
-      // Convert accuracy class to numeric score
+      const isCheckmateMove = isCheckmate(moment, index, keyMoments);
+      const accuracyClass = normalizeAccuracyClass(moment.accuracy_class, isCheckmateMove);
+      
+      let accuracyScore = 50; // Default
       switch (accuracyClass) {
-        case 'best': accuracyScore = 100; break;
-        case 'excellent': accuracyScore = 95; break;
-        case 'good': accuracyScore = 85; break;
-        case 'inaccuracy': accuracyScore = 70; break;
-        case 'mistake': accuracyScore = 50; break;
-        case 'miss': accuracyScore = 30; break;
-        case 'blunder': accuracyScore = 10; break;
-        case 'brilliant': accuracyScore = 100; break;
-        case 'great': accuracyScore = 98; break;
-        default: accuracyScore = 80;
+        case 'Brilliant': accuracyScore = 100; break;
+        case 'Best': accuracyScore = 95; break;
+        case 'Great': accuracyScore = 90; break;
+        case 'Balanced': accuracyScore = 85; break;
+        case 'Book': accuracyScore = 80; break;
+        case 'Forced': accuracyScore = 75; break;
+        case 'Inaccuracy': accuracyScore = 60; break;
+        case 'Mistake': accuracyScore = 40; break;
+        case 'Blunder': accuracyScore = 10; break;
+        case 'Checkmate': accuracyScore = 100; break; // Checkmate is excellent
       }
       
       return {
@@ -120,9 +171,9 @@ export const getGameAnalysis = async (gameId: string) => {
     });
 
     // Enhanced coach notes with specific recommendations
-    const mistakeCount = keyMoments.filter(m => m.accuracy_class?.toLowerCase() === 'mistake').length;
-    const blunderCount = keyMoments.filter(m => m.accuracy_class?.toLowerCase() === 'blunder').length;
-    const brilliantCount = keyMoments.filter(m => m.accuracy_class?.toLowerCase() === 'brilliant').length;
+    const mistakeCount = keyMoments.filter(m => m.accuracy_class === 'Mistake').length;
+    const blunderCount = keyMoments.filter(m => m.accuracy_class === 'Blunder').length;
+    const brilliantCount = keyMoments.filter(m => m.accuracy_class === 'Brilliant').length;
     
     let detailedCoachNotes = gameData.analysis || gameData.analysis_summary || '';
     
@@ -148,13 +199,6 @@ export const getGameAnalysis = async (gameId: string) => {
     // Transform backend response to match frontend expectations
     return {
       moves: moves,
-      criticalMoments: significantMoments.map((moment: any, index: number) => ({
-        moveNumber: moment.move_number || index + 1,
-        type: moment.accuracy_class?.toLowerCase() || 'note',
-        description: moment.description || moment.comment || `${moment.accuracy_class} move`,
-        delta_cp: moment.delta_cp || 0,
-        move: moment.move || ''
-      })),
       summary: {
         // Use avg_accuracy from backend, fallback to user_accuracy or calculated accuracy
         accuracy: gameData.avg_accuracy || gameData.user_accuracy || 

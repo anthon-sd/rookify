@@ -101,7 +101,7 @@ Each game moment in Supabase's `key_moments` JSONB field is converted to individ
   // Additional flags
   is_tactical_puzzle: boolean,
   is_brilliant: boolean,
-  is_great: boolean,
+  is_great: boolean, // Derived from accuracy_class == "Great"
   game_url: string
 }
 ```
