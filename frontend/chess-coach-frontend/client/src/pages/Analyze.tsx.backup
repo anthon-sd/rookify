@@ -10,6 +10,7 @@ import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircl
 import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 import { ChessBoard } from "@/components/ChessBoard"
+// import { VisxCentipawnChart } from "@/components/VisxCentipawnChart" // Temporarily commented out for testing
 
 interface Game {
   id: string
@@ -445,105 +446,28 @@ export function Analyze() {
                           gameAnalysis.moves.slice(0, 5).map(m => `${m.moveNumber}:${m.evaluation}`).join(', ')
                         }
                       </div>
-                      <div className="relative bg-gray-50 dark:bg-gray-800 rounded-lg p-4 h-64">
-                        <svg width="100%" height="100%" className="absolute inset-4">
-                          <defs>
-                            <linearGradient id="whiteAdvantage" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="rgba(34, 197, 94, 0.3)" />
-                              <stop offset="100%" stopColor="rgba(34, 197, 94, 0.1)" />
-                            </linearGradient>
-                            <linearGradient id="blackAdvantage" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.1)" />
-                              <stop offset="100%" stopColor="rgba(239, 68, 68, 0.3)" />
-                            </linearGradient>
-                          </defs>
-                          
-                          {/* Center line (0 evaluation) */}
-                          <line 
-                            x1="0" 
-                            y1="50%" 
-                            x2="100%" 
-                            y2="50%" 
-                            stroke="currentColor" 
-                            strokeWidth="1" 
-                            opacity="0.3"
-                            strokeDasharray="4,4"
-                          />
-                          
-                          {/* Evaluation line */}
-                          <polyline
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            points={gameAnalysis.moves.map((move, index) => {
-                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
-                              let evaluation = move.evaluation || 0;
-                              
-                              // Handle mate evaluations (convert large values to reasonable bounds)
-                              if (Math.abs(evaluation) > 5000) {
-                                evaluation = evaluation > 0 ? 1000 : -1000;
-                              }
-                              
-                              // Clamp evaluation between -10 and +10 pawns for better visualization
-                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
-                              // Convert to percentage (0% = +10 pawns, 100% = -10 pawns, 50% = equal)
-                              const y = 50 - (clampedEval / 1000) * 50;
-                              return `${x}%,${y}%`;
-                            }).join(' ')}
-                          />
-                          
-                          {/* Fill areas for advantage */}
-                          <polygon
-                            points={`0%,50% ${gameAnalysis.moves.map((move, index) => {
-                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
-                              let evaluation = move.evaluation || 0;
-                              
-                              // Handle mate evaluations
-                              if (Math.abs(evaluation) > 5000) {
-                                evaluation = evaluation > 0 ? 1000 : -1000;
-                              }
-                              
-                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
-                              const y = 50 - (clampedEval / 1000) * 50;
-                              return `${x}%,${Math.min(50, y)}%`;
-                            }).join(' ')} 100%,50%`}
-                            fill="url(#whiteAdvantage)"
-                          />
-                          
-                          <polygon
-                            points={`0%,50% ${gameAnalysis.moves.map((move, index) => {
-                              const x = (index / Math.max(gameAnalysis.moves.length - 1, 1)) * 100;
-                              let evaluation = move.evaluation || 0;
-                              
-                              // Handle mate evaluations
-                              if (Math.abs(evaluation) > 5000) {
-                                evaluation = evaluation > 0 ? 1000 : -1000;
-                              }
-                              
-                              const clampedEval = Math.max(-1000, Math.min(1000, evaluation));
-                              const y = 50 - (clampedEval / 1000) * 50;
-                              return `${x}%,${Math.max(50, y)}%`;
-                            }).join(' ')} 100%,50%`}
-                            fill="url(#blackAdvantage)"
-                          />
-                        </svg>
-                        
-                        {/* Y-axis labels */}
-                        <div className="absolute left-1 top-2 text-xs text-green-600 font-medium">+10</div>
-                        <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">0</div>
-                        <div className="absolute left-1 bottom-2 text-xs text-red-600 font-medium">-10</div>
-                        
-                        {/* Legend */}
-                        <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-500 rounded"></div>
-                            <span>White Advantage</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-red-500 rounded"></div>
-                            <span>Black Advantage</span>
-                          </div>
-                        </div>
+                                                                    <div className="relative bg-gray-50 dark:bg-gray-800 rounded-lg p-4 h-64">
+                         <div className="flex items-center justify-center h-full text-muted-foreground">
+                           Chart temporarily disabled for testing
+                         </div>
+                         
+                         {/* Y-axis labels */}
+                         <div className="absolute left-1 top-2 text-xs text-green-600 font-medium">+10</div>
+                         <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">0</div>
+                         <div className="absolute left-1 bottom-2 text-xs text-red-600 font-medium">-10</div>
+                         
+                         {/* Legend */}
+                         <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
+                           <div className="flex items-center gap-1">
+                             <div className="w-3 h-3 bg-green-500 rounded"></div>
+                             <span>White Advantage</span>
+                           </div>
+                           <div className="flex items-center gap-1">
+                             <div className="w-3 h-3 bg-red-500 rounded"></div>
+                             <span>Black Advantage</span>
+                           </div>
+                         </div>
+                       </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Stockfish engine evaluation in centipawns (100 centipawns = 1 pawn advantage). 

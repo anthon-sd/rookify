@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { TrendingUp, Trophy, Target, BarChart3, Star, Lock, CheckCircle, Edit, Save, X } from "lucide-react"
 import { useToast } from "@/hooks/useToast"
-// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { RatingHistoryChart } from "@/components/charts/RatingHistoryChart"
+import { SkillProgressHeatmap } from "@/components/charts/SkillProgressHeatmap"
 
 interface ProfileData {
   user: {
@@ -349,12 +350,11 @@ export function Profile() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg">
-                <div className="text-center text-muted-foreground">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Rating chart - to be implemented with recharts</p>
-                </div>
-              </div>
+              <RatingHistoryChart 
+                data={profileData.user.ratingHistory} 
+                width={600} 
+                height={300} 
+              />
             </CardContent>
           </Card>
 
@@ -399,6 +399,26 @@ export function Profile() {
         </TabsContent>
 
         <TabsContent value="skills" className="space-y-6">
+          {/* Skill Progress Heatmap */}
+          <Card className="chess-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-purple-500" />
+                Skill Progress Overview
+              </CardTitle>
+              <CardDescription>
+                Visual heatmap of your skill development across categories
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SkillProgressHeatmap 
+                skillTree={profileData.skillTree} 
+                width={800} 
+                height={400} 
+              />
+            </CardContent>
+          </Card>
+
           {/* Skill Tree */}
           {profileData.skillTree.map((category) => (
             <Card key={category.category} className="chess-card">
