@@ -7,11 +7,10 @@ import { Register } from "./pages/Register"
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { AppLayout } from "./components/AppLayout"
 import { Home } from "./pages/Home"
-// import { Analyze } from "./pages/Analyze" // Temporarily disabled
+import { Analyze } from "./pages/Analyze"
 import { Learn } from "./pages/Learn"
 import { Practice } from "./pages/Practice"
 import { Profile } from "./pages/Profile"
-import ChartTest from "./pages/ChartTest"
 
 function App() {
   return (
@@ -21,10 +20,9 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/chart-test" element={<ChartTest />} />
             <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route index element={<Home />} />
-              {/* <Route path="analyze" element={<Analyze />} /> */}
+              <Route path="analyze" element={<Analyze />} />
               <Route path="learn" element={<Learn />} />
               <Route path="practice" element={<Practice />} />
               <Route path="profile" element={<Profile />} />
