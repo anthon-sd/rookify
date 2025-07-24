@@ -31,12 +31,23 @@ interface ChessBoardProps {
   className?: string
   moveAccuracyData?: Array<{ moveNumber: number, accuracy: number, type: string }>
   moves?: Move[]
+  currentMoveIndex?: number
+  onMoveIndexChange?: (index: number) => void
 }
 
-export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyData = [], moves = [] }: ChessBoardProps) {
+export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyData = [], moves = [], currentMoveIndex: externalMoveIndex, onMoveIndexChange }: ChessBoardProps) {
   const [game, setGame] = useState(new Chess())
   const [gameHistory, setGameHistory] = useState<string[]>([])
-  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
+  const [internalMoveIndex, setInternalMoveIndex] = useState(-1)
+  const currentMoveIndex = externalMoveIndex !== undefined ? externalMoveIndex : internalMoveIndex
+  
+  const setCurrentMoveIndex = (index: number) => {
+    if (onMoveIndexChange) {
+      onMoveIndexChange(index)
+    } else {
+      setInternalMoveIndex(index)
+    }
+  }
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>(userColor)
   const [showCoordinates, setShowCoordinates] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -58,7 +69,9 @@ export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyDa
         newGame.reset()
         setGame(newGame)
         setGameHistory(history)
-        setCurrentMoveIndex(-1)
+        if (externalMoveIndex === undefined) {
+          setCurrentMoveIndex(-1)
+        }
         setArrows([])
         setMoveSquares({})
         
@@ -119,6 +132,13 @@ export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyDa
   const goToPrevious = () => goToMove(currentMoveIndex - 1)
   const goToNext = () => goToMove(currentMoveIndex + 1)
   const goToLast = () => goToMove(gameHistory.length - 1)
+
+  // Handle external move index changes
+  useEffect(() => {
+    if (externalMoveIndex !== undefined) {
+      goToMove(externalMoveIndex)
+    }
+  }, [externalMoveIndex, goToMove])
 
   // Keyboard navigation
   useEffect(() => {

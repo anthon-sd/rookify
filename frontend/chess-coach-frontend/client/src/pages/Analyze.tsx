@@ -41,6 +41,7 @@ export function Analyze() {
   const [gameAnalysis, setGameAnalysis] = useState<GameAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -153,6 +154,7 @@ export function Analyze() {
   const handleGameSelect = async (game: Game) => {
     setSelectedGame(game)
     setAnalysisLoading(true)
+    setCurrentMoveIndex(-1) // Reset move index when selecting new game
 
     try {
       const analysis = await getGameAnalysis(game.id) as GameAnalysis
@@ -167,6 +169,10 @@ export function Analyze() {
     } finally {
       setAnalysisLoading(false)
     }
+  }
+
+  const handleChartMoveClick = (moveIndex: number) => {
+    setCurrentMoveIndex(moveIndex)
   }
 
   const getResultBadge = (result: string) => {
@@ -330,53 +336,50 @@ export function Analyze() {
                     userColor={getUserColor(gameAnalysis)}
                     moveAccuracyData={gameAnalysis.moveAccuracyData}
                     moves={gameAnalysis.moves}
+                    currentMoveIndex={currentMoveIndex}
+                    onMoveIndexChange={setCurrentMoveIndex}
                   />
                   
                   {/* Centipawn Evaluation Chart */}
                   {gameAnalysis.moves && gameAnalysis.moves.length > 0 && (
-                    <div className="flex justify-center">
-                      <div className="w-full max-w-[500px] space-y-4">
-                        <Card>
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium">Position Evaluation Throughout Game</h4>
-                              <div className="flex items-center gap-2 text-xs text-blue-600">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span>Powered by Visx + Stockfish</span>
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-end">
+                          <div className="flex items-center gap-2 text-xs text-blue-600">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>Powered by Visx + Stockfish</span>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="relative rounded-lg p-4 h-64" style={{ backgroundColor: '#cccccc' }}>
+                                                      <div className="w-full h-full relative">
+                              <VisxCentipawnChart 
+                                moves={gameAnalysis.moves} 
+                                onMoveClick={handleChartMoveClick}
+                                currentMoveIndex={currentMoveIndex}
+                              />
+                            
+                            {/* Y-axis labels */}
+                            <div className="absolute left-1 top-2 text-xs text-gray-700 font-medium">+10</div>
+                            <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-gray-600">0</div>
+                            <div className="absolute left-1 bottom-2 text-xs text-gray-700 font-medium">-10</div>
+                            
+                            {/* Legend */}
+                            <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-white border border-gray-400 rounded"></div>
+                                <span>White Advantage</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-gray-800 rounded"></div>
+                                <span>Black Advantage</span>
                               </div>
                             </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="relative rounded-lg p-4 h-64" style={{ backgroundColor: '#cccccc' }}>
-                              <div className="w-full h-full relative">
-                                <VisxCentipawnChart moves={gameAnalysis.moves} />
-                                
-                                {/* Y-axis labels */}
-                                <div className="absolute left-1 top-2 text-xs text-gray-700 font-medium">+10</div>
-                                <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-gray-600">0</div>
-                                <div className="absolute left-1 bottom-2 text-xs text-gray-700 font-medium">-10</div>
-                                
-                                {/* Legend */}
-                                <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 bg-white border border-gray-400 rounded"></div>
-                                    <span>White Advantage</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 bg-gray-800 rounded"></div>
-                                    <span>Black Advantage</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-2">
-                              Stockfish engine evaluation in centipawns (100 centipawns = 1 pawn advantage). 
-                              Positive values favor White, negative values favor Black.
-                            </p>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </TabsContent>
 
