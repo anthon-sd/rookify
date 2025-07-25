@@ -238,14 +238,11 @@ export function VisxCentipawnChart({ moves, width: propWidth, height: propHeight
             const centipawnValue = (point.evaluation / 100).toFixed(1)
             const isPositive = point.evaluation >= 0
             const isCurrent = index === currentMoveIndex
-            const isWhiteMove = index % 2 === 0
-            const highlightColor = isWhiteMove ? "#000000" : "#ffffff"  // Black for white moves, white for black moves
+            const isPositiveEvaluation = point.evaluation >= 0
+            const highlightColor = isPositiveEvaluation ? "#000000" : "#ffffff"  // Black in white advantage area, white in black advantage area
             
-            // Only show labels for every few points to avoid clutter, or significant evaluation changes
-            const shouldShowLabel = index % 5 === 0 || 
-              (index > 0 && Math.abs(point.evaluation - chartData[index - 1].evaluation) > 200) ||
-              index === chartData.length - 1 ||
-              isCurrent // Always show label for current move
+            // Labels disabled for cleaner appearance
+            const shouldShowLabel = false
             
             return (
               <g key={`point-${index}`}>
@@ -254,10 +251,10 @@ export function VisxCentipawnChart({ moves, width: propWidth, height: propHeight
                   <circle
                     cx={x}
                     cy={y}
-                    r={7}
+                    r={4}
                     fill="none"
-                    stroke={isWhiteMove ? "#ffffff" : "#000000"}
-                    strokeWidth={3}
+                    stroke={isPositiveEvaluation ? "#000000" : "#ffffff"}
+                    strokeWidth={2}
                     opacity={0.8}
                   />
                 )}
@@ -268,7 +265,7 @@ export function VisxCentipawnChart({ moves, width: propWidth, height: propHeight
                   cy={y}
                   r={isCurrent ? 4 : 3}
                   fill={isCurrent ? highlightColor : (isPositive ? "#ffffff" : "#000000")}
-                  stroke={isCurrent ? (isWhiteMove ? "#ffffff" : "#000000") : (isPositive ? "#666666" : "#ffffff")}
+                  stroke={isCurrent ? (isPositiveEvaluation ? "#000000" : "#ffffff") : (isPositive ? "#666666" : "#ffffff")}
                   strokeWidth={isCurrent ? 2 : 1}
                   style={{ cursor: 'pointer' }}
                   onClick={() => onMoveClick?.(index)}
@@ -299,7 +296,7 @@ export function VisxCentipawnChart({ moves, width: propWidth, height: propHeight
                       fontWeight="bold"
                       style={{ 
                         textShadow: isCurrent 
-                          ? (isWhiteMove ? '1px 1px 3px rgba(255,255,255,0.8)' : '1px 1px 3px rgba(0,0,0,0.5)')
+                          ? (isPositiveEvaluation ? '1px 1px 3px rgba(255,255,255,0.8)' : '1px 1px 3px rgba(0,0,0,0.5)')
                           : '1px 1px 2px rgba(255,255,255,0.8)' 
                       }}
                     >
@@ -316,7 +313,7 @@ export function VisxCentipawnChart({ moves, width: propWidth, height: propHeight
                       fontWeight={isCurrent ? "bold" : "normal"}
                       style={{ 
                         textShadow: isCurrent 
-                          ? (isWhiteMove ? '1px 1px 3px rgba(255,255,255,0.8)' : '1px 1px 3px rgba(0,0,0,0.5)')
+                          ? (isPositiveEvaluation ? '1px 1px 3px rgba(255,255,255,0.8)' : '1px 1px 3px rgba(0,0,0,0.5)')
                           : '1px 1px 2px rgba(255,255,255,0.8)' 
                       }}
                     >

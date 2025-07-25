@@ -16,6 +16,7 @@ import {
   EyeOff
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { VisxCentipawnChart } from './VisxCentipawnChart'
 
 interface Move {
   move: string
@@ -33,9 +34,10 @@ interface ChessBoardProps {
   moves?: Move[]
   currentMoveIndex?: number
   onMoveIndexChange?: (index: number) => void
+  onChartMoveClick?: (moveIndex: number) => void
 }
 
-export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyData = [], moves = [], currentMoveIndex: externalMoveIndex, onMoveIndexChange }: ChessBoardProps) {
+export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyData = [], moves = [], currentMoveIndex: externalMoveIndex, onMoveIndexChange, onChartMoveClick }: ChessBoardProps) {
   const [game, setGame] = useState(new Chess())
   const [gameHistory, setGameHistory] = useState<string[]>([])
   const [internalMoveIndex, setInternalMoveIndex] = useState(-1)
@@ -496,6 +498,31 @@ export function ChessBoard({ pgn, userColor = 'white', className, moveAccuracyDa
             </div>
           </CardContent>
         </Card>
+        
+        {/* Centipawn Evaluation Chart */}
+        {moves && moves.length > 0 && (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">Evaluation Chart</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative rounded-lg p-4 h-48" style={{ backgroundColor: '#cccccc' }}>
+                <div className="w-full h-full relative">
+                  <VisxCentipawnChart 
+                    moves={moves} 
+                    onMoveClick={onChartMoveClick}
+                    currentMoveIndex={currentMoveIndex}
+                  />
+                  
+                  {/* Y-axis labels */}
+                  <div className="absolute left-1 top-2 text-xs text-gray-700 font-medium">+10</div>
+                  <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-gray-600">0</div>
+                  <div className="absolute left-1 bottom-2 text-xs text-gray-700 font-medium">-10</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

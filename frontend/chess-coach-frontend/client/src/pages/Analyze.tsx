@@ -10,7 +10,6 @@ import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircl
 import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 import { ChessBoard } from "@/components/ChessBoard"
-import { VisxCentipawnChart } from "@/components/VisxCentipawnChart"
 
 interface Game {
   id: string
@@ -338,49 +337,8 @@ export function Analyze() {
                     moves={gameAnalysis.moves}
                     currentMoveIndex={currentMoveIndex}
                     onMoveIndexChange={setCurrentMoveIndex}
+                    onChartMoveClick={handleChartMoveClick}
                   />
-                  
-                  {/* Centipawn Evaluation Chart */}
-                  {gameAnalysis.moves && gameAnalysis.moves.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <div className="flex items-center justify-end">
-                          <div className="flex items-center gap-2 text-xs text-blue-600">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <span>Powered by Visx + Stockfish</span>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="relative rounded-lg p-4 h-64" style={{ backgroundColor: '#cccccc' }}>
-                                                      <div className="w-full h-full relative">
-                              <VisxCentipawnChart 
-                                moves={gameAnalysis.moves} 
-                                onMoveClick={handleChartMoveClick}
-                                currentMoveIndex={currentMoveIndex}
-                              />
-                            
-                            {/* Y-axis labels */}
-                            <div className="absolute left-1 top-2 text-xs text-gray-700 font-medium">+10</div>
-                            <div className="absolute left-1 top-1/2 transform -translate-y-1/2 text-xs text-gray-600">0</div>
-                            <div className="absolute left-1 bottom-2 text-xs text-gray-700 font-medium">-10</div>
-                            
-                            {/* Legend */}
-                            <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
-                              <div className="flex items-center gap-1">
-                                <div className="w-3 h-3 bg-white border border-gray-400 rounded"></div>
-                                <span>White Advantage</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <div className="w-3 h-3 bg-gray-800 rounded"></div>
-                                <span>Black Advantage</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
                 </TabsContent>
 
                 <TabsContent value="overview" className="space-y-4">
