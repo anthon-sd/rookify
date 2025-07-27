@@ -42,7 +42,7 @@ export function UserMemoryPanel({ userId }: UserMemoryPanelProps) {
   const fetchUserMemory = async () => {
     try {
       setError(null);
-      const response = await backendApi.authenticatedRequest(`/memory/${userId}`);
+      const response = await backendApi.getUserMemory(userId);
       setMemory(response.memory || {});
     } catch (error: any) {
       console.error('Failed to fetch memory:', error);
@@ -54,7 +54,7 @@ export function UserMemoryPanel({ userId }: UserMemoryPanelProps) {
 
   const fetchUserPreferences = async () => {
     try {
-      const response = await backendApi.authenticatedRequest(`/memory/${userId}/preferences`);
+      const response = await backendApi.getUserPreferences(userId);
       setPreferences(response.preferences || {});
     } catch (error: any) {
       console.error('Failed to fetch preferences:', error);
@@ -65,9 +65,7 @@ export function UserMemoryPanel({ userId }: UserMemoryPanelProps) {
   const handleResetMemory = async () => {
     try {
       setError(null);
-      await backendApi.authenticatedRequest(`/memory/${userId}/reset`, {
-        method: 'DELETE'
-      });
+      await backendApi.resetUserMemory(userId);
       await fetchUserMemory();
     } catch (error: any) {
       console.error('Failed to reset memory:', error);
@@ -78,10 +76,7 @@ export function UserMemoryPanel({ userId }: UserMemoryPanelProps) {
   const updatePreference = async (key: string, value: any) => {
     try {
       setError(null);
-      await backendApi.authenticatedRequest(`/memory/${userId}/preferences`, {
-        method: 'PUT',
-        body: JSON.stringify({ [key]: value })
-      });
+      await backendApi.updateUserPreferences(userId, { [key]: value });
       await fetchUserPreferences();
       // Update memory state if it affects displayed preferences
       if (key === 'feedback_tone') {

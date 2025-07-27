@@ -395,7 +395,7 @@ class BackendAPI {
       throw new Error('User not authenticated')
     }
 
-    return this.authenticatedRequest(`/memory/${userId}`)
+    return this.authenticatedRequest(`/api/memory/${userId}`)
   }
 
   /**
@@ -406,7 +406,7 @@ class BackendAPI {
       throw new Error('User not authenticated')
     }
 
-    return this.authenticatedRequest(`/memory/${userId}/preferences`)
+    return this.authenticatedRequest(`/api/memory/${userId}/preferences`)
   }
 
   /**
@@ -417,7 +417,7 @@ class BackendAPI {
       throw new Error('User not authenticated')
     }
 
-    return this.authenticatedRequest(`/memory/${userId}/preferences`, {
+    return this.authenticatedRequest(`/api/memory/${userId}/preferences`, {
       method: 'PUT',
       body: JSON.stringify(preferences)
     })
@@ -431,7 +431,7 @@ class BackendAPI {
       throw new Error('User not authenticated')
     }
 
-    return this.authenticatedRequest(`/memory/${userId}/reset`, {
+    return this.authenticatedRequest(`/api/memory/${userId}/reset`, {
       method: 'DELETE'
     })
   }
