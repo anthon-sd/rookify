@@ -18,3 +18,4 @@ gotrue==1.2.0
 pinecone
 openai==1.12.0
 python-chess==1.999.0
+numpy==1.24.3

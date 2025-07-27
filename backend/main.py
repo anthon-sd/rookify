@@ -1591,8 +1591,11 @@ if __name__ == "__main__":
 # Memory Context Protocol (MCP) Endpoints
 # ==========================================
 
-# Initialize memory service
+# Initialize memory services
+from services.enhanced_memory_service import EnhancedMemoryService
+
 memory_service = MemoryService()
+enhanced_memory_service = EnhancedMemoryService()
 
 @app.get("/api/memory/{user_id}")
 async def get_user_memory(
@@ -1622,11 +1625,24 @@ async def get_user_memory_frontend(
 @app.get("/api/memory/{user_id}/context")
 async def get_user_context(
     user_id: str,
-    include_recent: bool = True
+    include_recent: bool = True,
+    enhanced: bool = False
 ):
     """Get user context for AI prompts (internal use)"""
-    context = await memory_service.get_context_for_prompt(user_id, include_recent)
-    return {"context": context}
+    if enhanced:
+        # Use enhanced memory service for richer context
+        enhanced_context = await enhanced_memory_service.get_user_context(user_id, include_vector_insights=True)
+        # Convert to prompt-ready format
+        context = await enhanced_memory_service.get_context_for_prompt(user_id, include_recent)
+        return {
+            "context": context,
+            "enhanced_insights": enhanced_context.get('vector_insights', {}),
+            "context_type": "enhanced"
+        }
+    else:
+        # Use basic memory service
+        context = await memory_service.get_context_for_prompt(user_id, include_recent)
+        return {"context": context}
 
 @app.post("/api/memory/{user_id}/update")
 async def update_memory_session(
@@ -1747,6 +1763,237 @@ async def get_similar_users_by_memory(
     
     similar_users = await memory_service.find_similar_users_by_memory(user_id, limit)
     return {"similar_users": similar_users}
+
+# Enhanced Memory Service Endpoints
+@app.get("/api/memory/{user_id}/enhanced-context")
+async def get_enhanced_user_context(
+    user_id: str,
+    include_vector_insights: bool = True,
+    current_user: User = Depends(get_current_user)
+):
+    """Get comprehensive user context with vector database insights"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        enhanced_context = await enhanced_memory_service.get_user_context(
+            user_id, 
+            include_vector_insights=include_vector_insights
+        )
+        return {"enhanced_context": enhanced_context}
+    except Exception as e:
+        logger.error(f"Error getting enhanced context for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get enhanced context")
+
+@app.get("/api/memory/{user_id}/style-embedding")
+async def get_user_style_embedding(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user's playing style as a vector embedding"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        style_embedding = await enhanced_memory_service.get_style_embedding(user_id)
+        return {
+            "user_id": user_id,
+            "style_embedding": style_embedding,
+            "embedding_dimensions": len(style_embedding)
+        }
+    except Exception as e:
+        logger.error(f"Error getting style embedding for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get style embedding")
+
+@app.get("/api/memory/{user_id}/training-recommendations")
+async def get_personalized_training_recommendations(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get AI-generated personalized training recommendations"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        recommendations = await enhanced_memory_service.get_personalized_training_recommendations(user_id)
+        return {
+            "user_id": user_id,
+            "recommendations": recommendations,
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting training recommendations for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get training recommendations")
+
+@app.get("/api/memory/{user_id}/tactical-analysis")
+async def get_tactical_analysis(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get detailed tactical strengths and weaknesses analysis"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        tactical_patterns = await enhanced_memory_service.analyze_tactical_patterns(user_id)
+        return {
+            "user_id": user_id,
+            "tactical_analysis": tactical_patterns,
+            "analyzed_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting tactical analysis for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get tactical analysis")
+
+@app.get("/api/memory/{user_id}/opening-analysis")
+async def get_opening_analysis(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get opening repertoire analysis and performance"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        opening_insights = await enhanced_memory_service.analyze_opening_patterns(user_id)
+        return {
+            "user_id": user_id,
+            "opening_analysis": opening_insights,
+            "analyzed_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting opening analysis for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get opening analysis")
+
+@app.get("/api/memory/{user_id}/similar-players")
+async def get_enhanced_similar_players(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get players with similar playing patterns using vector analysis"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        similar_insights = await enhanced_memory_service.get_similar_player_insights(user_id)
+        return {
+            "user_id": user_id,
+            "similar_player_insights": similar_insights,
+            "analyzed_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting similar player insights for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get similar player insights")
+
+@app.post("/api/memory/{user_id}/update-enhanced")
+async def update_memory_with_enhanced_insights(
+    user_id: str,
+    session_data: Dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Update memory with enhanced vector-based insights after a session"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    try:
+        updated_memory = await enhanced_memory_service.update_memory_with_insights(user_id, session_data)
+        return {
+            "user_id": user_id,
+            "updated_memory": updated_memory,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error updating memory with insights for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update memory with insights")
+
+@app.get("/api/admin/memory/{user_id}/full-analysis")
+async def get_full_enhanced_analysis(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint: Get comprehensive enhanced memory analysis for a user"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Get all enhanced insights
+        full_analysis = {
+            "user_id": user_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "enhanced_context": await enhanced_memory_service.get_user_context(user_id),
+            "style_embedding": await enhanced_memory_service.get_style_embedding(user_id),
+            "training_recommendations": await enhanced_memory_service.get_personalized_training_recommendations(user_id),
+            "tactical_analysis": await enhanced_memory_service.analyze_tactical_patterns(user_id),
+            "opening_analysis": await enhanced_memory_service.analyze_opening_patterns(user_id),
+            "time_management": await enhanced_memory_service.analyze_time_management(user_id),
+            "similar_players": await enhanced_memory_service.get_similar_player_insights(user_id)
+        }
+        
+        return {"full_analysis": full_analysis}
+        
+    except Exception as e:
+        logger.error(f"Error getting full enhanced analysis for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get full enhanced analysis")
+
+@app.post("/api/admin/memory/batch-enhance")
+async def batch_enhance_user_memories(
+    background_tasks: BackgroundTasks,
+    user_ids: Optional[List[str]] = None,
+    limit: Optional[int] = 10,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint: Batch process enhanced memory analysis for multiple users"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Get users to process
+        if user_ids:
+            target_users = user_ids
+        else:
+            # Get users with recent activity
+            recent_users = supabase.table('user_memory').select('user_id').limit(limit).execute()
+            target_users = [user['user_id'] for user in recent_users.data] if recent_users.data else []
+        
+        # Start background task for batch processing
+        background_tasks.add_task(
+            batch_process_enhanced_memories,
+            target_users
+        )
+        
+        return {
+            "message": f"Batch enhancement started for {len(target_users)} users",
+            "user_count": len(target_users),
+            "status": "processing"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error starting batch enhancement: {e}")
+        raise HTTPException(status_code=500, detail="Failed to start batch enhancement")
+
+async def batch_process_enhanced_memories(user_ids: List[str]):
+    """Background task to process enhanced memory analysis for multiple users"""
+    try:
+        enhanced_service = EnhancedMemoryService()
+        
+        for user_id in user_ids:
+            try:
+                logger.info(f"Processing enhanced memory for user {user_id}")
+                
+                # Generate enhanced insights
+                session_data = {"include_vector_analysis": True}
+                await enhanced_service.update_memory_with_insights(user_id, session_data)
+                
+                logger.info(f"✅ Enhanced memory processed for user {user_id}")
+                
+            except Exception as user_error:
+                logger.error(f"❌ Failed to process enhanced memory for user {user_id}: {user_error}")
+                continue
+        
+        logger.info(f"🎉 Batch processing completed for {len(user_ids)} users")
+        
+    except Exception as e:
+        logger.error(f"💥 Batch processing failed: {e}")
 
 if __name__ == "__main__":
     # Run tests if this file is executed directly
