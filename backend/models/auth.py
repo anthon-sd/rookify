@@ -14,6 +14,7 @@ class UserBase(BaseModel):
     chess_com_username: Optional[str] = None
     lichess_username: Optional[str] = None
     rating_progress: List[RatingProgressEntry]
+    is_admin: Optional[bool] = False
 
 class UserCreate(UserBase):
     password: str

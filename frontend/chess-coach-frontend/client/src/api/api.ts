@@ -386,6 +386,55 @@ class BackendAPI {
 
     return await response.json();
   }
+
+  /**
+   * Get user memory data
+   */
+  async getUserMemory(userId: string): Promise<any> {
+    if (!this.token) {
+      throw new Error('User not authenticated')
+    }
+
+    return this.authenticatedRequest(`/memory/${userId}`)
+  }
+
+  /**
+   * Get user preferences
+   */
+  async getUserPreferences(userId: string): Promise<any> {
+    if (!this.token) {
+      throw new Error('User not authenticated')
+    }
+
+    return this.authenticatedRequest(`/memory/${userId}/preferences`)
+  }
+
+  /**
+   * Update user preferences
+   */
+  async updateUserPreferences(userId: string, preferences: Record<string, any>): Promise<any> {
+    if (!this.token) {
+      throw new Error('User not authenticated')
+    }
+
+    return this.authenticatedRequest(`/memory/${userId}/preferences`, {
+      method: 'PUT',
+      body: JSON.stringify(preferences)
+    })
+  }
+
+  /**
+   * Reset user memory
+   */
+  async resetUserMemory(userId: string): Promise<any> {
+    if (!this.token) {
+      throw new Error('User not authenticated')
+    }
+
+    return this.authenticatedRequest(`/memory/${userId}/reset`, {
+      method: 'DELETE'
+    })
+  }
 }
 
 export const backendApi = new BackendAPI()

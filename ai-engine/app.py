@@ -15,6 +15,7 @@ from flask_cors import CORS
 from pydantic import BaseModel, Field, ValidationError
 from openai import OpenAI
 from stockfish import Stockfish
+import aiohttp
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +28,7 @@ class Config:
     STOCKFISH_MIN_TIME: int = int(os.getenv("STOCKFISH_MIN_TIME", 100))
     STOCKFISH_POOL_SIZE: int = int(os.getenv("STOCKFISH_POOL_SIZE", 4))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://backend:8000")
 
 class AnalyzeRequest(BaseModel):
     fen: Optional[str] = None
@@ -34,6 +36,7 @@ class AnalyzeRequest(BaseModel):
     depth: int = Field(default=20, ge=1, le=100)
     user_level: str = Field(default="intermediate")
     user_rating: Optional[int] = None
+    user_id: Optional[str] = None  # Add user_id for MCP integration
     skip_llm: bool = Field(default=False)
     move_context: Optional[Dict] = None
 
@@ -47,12 +50,14 @@ class PositionRequest(BaseModel):
     position_id: Optional[str] = None
     user_level: str = Field(default="intermediate")
     user_rating: Optional[int] = None
+    user_id: Optional[str] = None  # Add user_id for MCP integration
 
 class BatchAnalyzeRequest(BaseModel):
     positions: List[PositionRequest] = Field(..., max_items=100)
     default_depth: int = Field(default=20, ge=1, le=100)
     user_level: str = Field(default="intermediate")
     user_rating: Optional[int] = None
+    user_id: Optional[str] = None  # Add user_id for MCP integration
     selective_llm: bool = Field(default=True)
     
     class Config:
@@ -83,6 +88,26 @@ class StockfishPool:
     def release(self, engine):
         """Return Stockfish instance to pool"""
         self.pool.put(engine)
+
+class MCPContextManager:
+    """Manages memory context for AI prompts"""
+    
+    def __init__(self, backend_url: str):
+        self.backend_url = backend_url
+    
+    async def get_user_context(self, user_id: str) -> Optional[str]:
+        """Fetch user context from backend memory service"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.backend_url}/api/memory/{user_id}/context"
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get('context', '')
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Failed to fetch user context: {e}")
+        return None
 
 def should_get_llm_analysis(move_context: Dict, user_rating: int = 1500) -> bool:
     """Determine if a position warrants LLM analysis based on selective criteria"""
@@ -485,6 +510,9 @@ def create_app() -> Flask:
     # Initialize clients
     openai_client = OpenAI(api_key=app.config['OPENAI_API_KEY'])
     
+    # Initialize MCP context manager
+    mcp_manager = MCPContextManager(app.config['BACKEND_URL'])
+    
     # Initialize Stockfish pool
     stockfish_pool = StockfishPool(
         size=app.config['STOCKFISH_POOL_SIZE'],
@@ -525,11 +553,29 @@ def create_app() -> Flask:
             if not position_req.move_context or not position_req.move_context.get('skip_llm', False):
                 if should_get_llm_analysis(position_req.move_context or {}, position_req.user_rating or 1500):
                     try:
-                        analysis = get_llm_analysis(
-                            evaluation, best_move,
-                            position_req.user_level,
-                            position_req.user_rating
-                        )
+                        # Use memory-aware analysis if user_id is provided
+                        if position_req.user_id:
+                            # Get user context synchronously for now (can be improved later)
+                            import asyncio
+                            try:
+                                loop = asyncio.get_event_loop()
+                                user_context = loop.run_until_complete(mcp_manager.get_user_context(position_req.user_id))
+                            except:
+                                user_context = None
+                            
+                            analysis = get_llm_analysis(
+                                evaluation, best_move,
+                                position_req.user_level,
+                                position_req.user_rating,
+                                user_context
+                            )
+                        else:
+                            analysis = get_llm_analysis(
+                                evaluation, best_move,
+                                position_req.user_level,
+                                position_req.user_rating
+                            )
+                        
                         result['analysis'] = analysis
                         result['llm_used'] = True
                     except Exception as e:
@@ -552,7 +598,8 @@ def create_app() -> Flask:
 
     def get_llm_analysis(evaluation: dict, best_move: str,
                          user_level: str = "intermediate",
-                         user_rating: Optional[int] = None) -> str:
+                         user_rating: Optional[int] = None,
+                         user_context: Optional[str] = None) -> str:
         """Generate personalized chess analysis via OpenAI."""
         score = evaluation.get("value", 0)
         is_mate = evaluation.get("type") == "mate"
@@ -579,18 +626,39 @@ def create_app() -> Flask:
                      "Advanced" if user_rating < 2200 else "Expert")
             rating_ctx = f" (Rated {user_rating} - {level})"
 
-        prompt = (
-            f"You are a chess coach analyzing a position for a {user_level} level player{rating_ctx}."
-            f"\n\nPosition context: {context}"
-            f"\nBest move: {best_move}"
-            "\n\nPlease provide a brief, clear analysis of the position that is appropriate for a {user_level} level player{rating_ctx}."
-            "\nFocus on:"
-            "\n1. The key ideas in the position"
-            "\n2. Why the best move is strong"
-            "\n3. What the player should be thinking about"
-            "\n4. Specific tactical or strategic concepts that would be most relevant for this rating level"
-            "\n\nKeep the analysis concise and educational, tailored to the player's rating level."
-        )
+        # Memory context integration
+        memory_context = ""
+        if user_context:
+            memory_context = f"\n\nUser Context:\n{user_context}"
+
+        # Enhanced prompt with memory
+        if user_context:
+            prompt = (
+                f"You are a personalized chess coach with deep knowledge of this player.{memory_context}"
+                f"\n\nCurrent position analysis:"
+                f"\nPosition context: {context}"
+                f"\nBest move: {best_move}"
+                "\n\nProvide analysis that:"
+                "\n1. Relates to the player's known patterns and weaknesses"
+                "\n2. Uses their preferred feedback tone"
+                "\n3. Builds on their current focus areas"
+                "\n4. References their progress when relevant"
+                "\n\nKeep the analysis concise, personal, and encouraging."
+            )
+        else:
+            # Fallback to original prompt for users without memory context
+            prompt = (
+                f"You are a chess coach analyzing a position for a {user_level} level player{rating_ctx}."
+                f"\n\nPosition context: {context}"
+                f"\nBest move: {best_move}"
+                "\n\nPlease provide a brief, clear analysis of the position that is appropriate for a {user_level} level player{rating_ctx}."
+                "\nFocus on:"
+                "\n1. The key ideas in the position"
+                "\n2. Why the best move is strong"
+                "\n3. What the player should be thinking about"
+                "\n4. Specific tactical or strategic concepts that would be most relevant for this rating level"
+                "\n\nKeep the analysis concise and educational, tailored to the player's rating level."
+            )
 
         try:
             resp = openai_client.chat.completions.create(
@@ -606,10 +674,65 @@ def create_app() -> Flask:
         except Exception as exc:
             logger.error("OpenAI request failed", exc_info=exc)
             return f"{context} The best move is {best_move}."
+    
+    async def get_llm_analysis_with_memory(evaluation: dict, best_move: str,
+                                          user_id: Optional[str] = None,
+                                          user_level: str = "intermediate",
+                                          user_rating: Optional[int] = None,
+                                          move_context: Optional[Dict] = None) -> str:
+        """Generate personalized chess analysis with memory context (async)"""
+        
+        # Fetch user memory context if available
+        user_context = None
+        if user_id and mcp_manager:
+            user_context = await mcp_manager.get_user_context(user_id)
+        
+        # Use the enhanced get_llm_analysis function
+        return get_llm_analysis(
+            evaluation=evaluation,
+            best_move=best_move,
+            user_level=user_level,
+            user_rating=user_rating,
+            user_context=user_context
+        )
 
     @app.route('/health', methods=['GET'])
     def health_check():
         return jsonify(status='healthy', service='ai-engine')
+    
+    @app.route('/test-mcp', methods=['POST'])
+    def test_mcp():
+        """Test MCP context fetching"""
+        try:
+            payload = request.get_json(force=True)
+            user_id = payload.get('user_id')
+            
+            if not user_id:
+                return jsonify(error='user_id required'), 400
+            
+            # Test MCP context fetching
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                user_context = loop.run_until_complete(mcp_manager.get_user_context(user_id))
+                loop.close()
+                
+                return jsonify({
+                    'user_id': user_id,
+                    'context_available': user_context is not None,
+                    'context_length': len(user_context) if user_context else 0,
+                    'context_preview': user_context[:200] + '...' if user_context and len(user_context) > 200 else user_context
+                })
+            except Exception as e:
+                return jsonify({
+                    'user_id': user_id,
+                    'error': str(e),
+                    'context_available': False
+                })
+                
+        except Exception as e:
+            return jsonify(error=str(e)), 500
 
     @app.route('/analyze', methods=['POST'])
     def analyze():
@@ -629,7 +752,8 @@ def create_app() -> Flask:
                 move_context=req.move_context,
                 position_id="single",
                 user_level=req.user_level,
-                user_rating=req.user_rating
+                user_rating=req.user_rating,
+                user_id=req.user_id
             )
             
             if req.skip_llm and pos_req.move_context:
@@ -664,6 +788,8 @@ def create_app() -> Flask:
                     position.user_level = req.user_level
                 if not hasattr(position, 'user_rating') or not position.user_rating:
                     position.user_rating = req.user_rating
+                if not hasattr(position, 'user_id') or not position.user_id:
+                    position.user_id = req.user_id
                 
                 # Add selective LLM flag
                 if req.selective_llm and position.move_context:

@@ -26,6 +26,7 @@ import requests
 import chess.pgn
 import io
 from utils.sync_job_compliance import sync_job_manager
+from services.memory_service import MemoryService
 
 # Configuration
 AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://ai-engine:5000")
@@ -1586,6 +1587,168 @@ if __name__ == "__main__":
         
         print("Filtering tests completed!")
     
+# ==========================================
+# Memory Context Protocol (MCP) Endpoints
+# ==========================================
+
+# Initialize memory service
+memory_service = MemoryService()
+
+@app.get("/api/memory/{user_id}")
+async def get_user_memory(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user's memory profile"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    memory = await memory_service.get_or_create_memory(user_id)
+    return {"memory": memory}
+
+# Frontend-compatible endpoints (without /api prefix)
+@app.get("/memory/{user_id}")
+async def get_user_memory_frontend(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user's memory profile (frontend endpoint)"""
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    memory = await memory_service.get_or_create_memory(user_id)
+    return {"memory": memory}
+
+@app.get("/api/memory/{user_id}/context")
+async def get_user_context(
+    user_id: str,
+    include_recent: bool = True
+):
+    """Get user context for AI prompts (internal use)"""
+    context = await memory_service.get_context_for_prompt(user_id, include_recent)
+    return {"context": context}
+
+@app.post("/api/memory/{user_id}/update")
+async def update_memory_session(
+    user_id: str,
+    session_data: Dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Update memory after a session"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated_memory = await memory_service.update_memory_after_session(user_id, session_data)
+    return {"memory": updated_memory}
+
+@app.get("/api/memory/{user_id}/preferences")
+async def get_user_preferences(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user preferences"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    preferences = await memory_service.get_user_preferences(user_id)
+    return {"preferences": preferences}
+
+@app.put("/api/memory/{user_id}/preferences")
+async def update_user_preferences(
+    user_id: str,
+    preferences: Dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Update user preferences"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = await memory_service.update_preferences(user_id, preferences)
+    return {"preferences": updated}
+
+@app.delete("/api/memory/{user_id}/reset")
+async def reset_user_memory(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Reset user memory (fresh start)"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Delete existing memory
+    supabase.table('user_memory').delete().eq('user_id', user_id).execute()
+    
+    # Create fresh memory
+    new_memory = await memory_service.get_or_create_memory(user_id)
+    return {"message": "Memory reset successful", "memory": new_memory}
+
+@app.get("/memory/{user_id}/preferences")
+async def get_user_preferences_frontend(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user preferences (frontend endpoint)"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    preferences = await memory_service.get_user_preferences(user_id)
+    return {"preferences": preferences}
+
+@app.put("/memory/{user_id}/preferences")
+async def update_user_preferences_frontend(
+    user_id: str,
+    preferences: Dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Update user preferences (frontend endpoint)"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = await memory_service.update_preferences(user_id, preferences)
+    return {"preferences": updated}
+
+@app.delete("/memory/{user_id}/reset")
+async def reset_user_memory_frontend(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Reset user memory (frontend endpoint)"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Delete existing memory
+    supabase.table('user_memory').delete().eq('user_id', user_id).execute()
+    
+    # Create fresh memory
+    new_memory = await memory_service.get_or_create_memory(user_id)
+    return {"message": "Memory reset successful", "memory": new_memory}
+
+@app.get("/api/memory/{user_id}/analytics")
+async def get_memory_analytics(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user memory analytics and progress"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    analytics = await memory_service.get_memory_analytics(user_id)
+    return {"analytics": analytics}
+
+@app.get("/api/memory/{user_id}/similar-users")
+async def get_similar_users_by_memory(
+    user_id: str,
+    limit: int = 5,
+    current_user: User = Depends(get_current_user)
+):
+    """Find users with similar memory patterns"""
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    similar_users = await memory_service.find_similar_users_by_memory(user_id, limit)
+    return {"similar_users": similar_users}
+
+if __name__ == "__main__":
     # Run tests if this file is executed directly
     # test_filtering()
     

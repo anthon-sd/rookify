@@ -12,10 +12,10 @@ load_dotenv()
 
 # Initialize Supabase client
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')
+supabase_key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
 
 if not supabase_url or not supabase_key:
-    print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required")
+    print("Error: SUPABASE_URL and SUPABASE_SERVICE_KEY (or SUPABASE_KEY) environment variables are required")
     exit(1)
 
 supabase: Client = create_client(supabase_url, supabase_key)

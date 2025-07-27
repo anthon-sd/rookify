@@ -13,6 +13,7 @@ import { TrendingUp, Trophy, Target, BarChart3, Star, Lock, CheckCircle, Edit, S
 import { useToast } from "@/hooks/useToast"
 import { RatingHistoryChart } from "@/components/charts/RatingHistoryChart"
 import { SkillProgressHeatmap } from "@/components/charts/SkillProgressHeatmap"
+import { UserMemoryPanel } from "@/components/UserMemoryPanel"
 
 interface ProfileData {
   user: {
@@ -330,11 +331,12 @@ export function Profile() {
       </Card>
 
       <Tabs defaultValue="performance" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="achievements">Achievements</TabsTrigger>
           <TabsTrigger value="improvement">Improvement</TabsTrigger>
+          <TabsTrigger value="memory">Memory</TabsTrigger>
         </TabsList>
 
         <TabsContent value="performance" className="space-y-6">
@@ -554,6 +556,10 @@ export function Profile() {
               ))}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="memory" className="space-y-6">
+          <UserMemoryPanel userId={profileData.user.id} />
         </TabsContent>
       </Tabs>
     </div>
