@@ -40,6 +40,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MODEL_PATH=/app/models/chess_model.pkl
+      - STOCKFISH_PATH=/usr/local/bin/stockfish
     volumes:
       - ./ai-engine/models:/app/models
     networks:

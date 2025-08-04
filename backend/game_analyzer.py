@@ -325,10 +325,122 @@ class GameAnalyzer:
         prev_eval = None
         prev_mat = None
 
+        # First pass: Calculate accuracy classes for all moves
+        accuracy_classes = []
+        deltas_cp = []
+        
+        for i, moment in enumerate(moments):
+            board = chess.Board(moment['position_fen'])
+            mat_before = self.material_count(board)
+
+            # Get analysis results
+            position_id_before = f"pos_{i}_before"
+            position_id_after = f"pos_{i}_after"
+
+            best_info = batch_results.get(position_id_before, {})
+            best_move = best_info.get("best_move")
+            best_eval = best_info.get("evaluation", {}).get("value")
+
+            if best_info.get("evaluation", {}).get("type") == "mate":
+                best_eval = 10000 if best_eval > 0 else -10000
+
+            # Get evaluation after move
+            player_eval = None
+            if moment.get('move'):
+                try:
+                    move = chess.Move.from_uci(moment['move'])
+                    board.push(move)
+                    deep_info = batch_results.get(position_id_after, {})
+                    player_eval = deep_info.get("evaluation", {}).get("value")
+                    if deep_info.get("evaluation", {}).get("type") == "mate":
+                        player_eval = 10000 if player_eval > 0 else -10000
+                except Exception:
+                    player_eval = None
+
+            # Calculate evaluation difference
+            delta_cp = abs((player_eval or 0) - (best_eval or 0)) if best_eval is not None else 0
+            deltas_cp.append(delta_cp)
+
+            # Get material count after move
+            mat_after = self.material_count(board)
+
+            # Detect brilliant/great moves
+            is_brilliant = self.detect_brilliance(
+                prev_eval if prev_eval is not None else 0,
+                player_eval if player_eval is not None else 0,
+                prev_mat if prev_mat is not None else mat_before,
+                mat_after,
+                best_eval if best_eval is not None else 0
+            )
+
+            # Detect forced moves
+            is_forced = False
+            if moment.get('move') and best_move:
+                try:
+                    board_temp = chess.Board(moment['position_fen'])
+                    is_forced = self.detect_forced_move(
+                        board_temp,
+                        moment['move'],
+                        best_move,
+                        player_eval if player_eval is not None else 0,
+                        best_eval if best_eval is not None else 0,
+                        depth
+                    )
+                except Exception:
+                    is_forced = False
+
+            # Classify the move
+            accuracy_class = self.classify_move(
+                delta_cp, 
+                is_brilliant=is_brilliant, 
+                is_forced=is_forced
+            )
+            accuracy_classes.append(accuracy_class)
+            
+            prev_eval = player_eval
+            prev_mat = mat_after
+
+        # Second pass: Create analyzed moments and request LLM analysis for important moves
+        llm_positions = []
+        for i, moment in enumerate(moments):
+            accuracy_class = accuracy_classes[i]
+            delta_cp = deltas_cp[i]
+            
+            # Check if this move needs LLM analysis
+            if accuracy_class in ['Mistake', 'Blunder', 'Brilliant', 'Great'] and delta_cp > 50:
+                position_id_after = f"pos_{i}_after"
+                if position_id_after in batch_results:
+                    # Create enhanced move context for LLM analysis
+                    enhanced_context = {
+                        'accuracy_class': accuracy_class,
+                        'delta_cp': delta_cp,
+                        'is_tactical': True,
+                        'move_number': i + 1,
+                        'phase': self.determine_phase(i + 1, chess.Board(moment['position_fen']))
+                    }
+                    
+                    llm_positions.append({
+                        'fen': batch_results[position_id_after].get('fen', moment['position_fen']),
+                        'position_id': f"llm_{i}",
+                        'depth': depth,
+                        'move_context': enhanced_context,
+                        'user_level': user_level,
+                        'user_rating': user_rating
+                    })
+
+        # Request LLM analysis for important positions
+        llm_results = {}
+        if llm_positions:
+            print(f"🧠 Requesting LLM analysis for {len(llm_positions)} important positions...")
+            llm_results = self.analyze_positions_batch(llm_positions, depth, user_rating, user_level)
+
+        # Third pass: Create final analyzed moments
         for i, moment in enumerate(moments):
             board = chess.Board(moment['position_fen'])
             move_number = i + 1
-            mat_before = self.material_count(board)
+            
+            accuracy_class = accuracy_classes[i]
+            delta_cp = deltas_cp[i]
 
             # Get analysis results
             position_id_before = f"pos_{i}_before"
@@ -358,49 +470,22 @@ class GameAnalyzer:
 
                     # Get LLM analysis if it was generated
                     llm_analysis = deep_info.get("analysis")
+                    
+                    # Check for enhanced LLM analysis
+                    llm_position_id = f"llm_{i}"
+                    if llm_position_id in llm_results:
+                        enhanced_llm = llm_results[llm_position_id].get("analysis")
+                        if enhanced_llm:
+                            llm_analysis = enhanced_llm
 
                 except Exception as e:
                     print(f"Error processing move for moment {i}: {e}")
 
-            # Calculate evaluation difference
-            delta_cp = abs((player_eval or 0) - (best_eval or 0)) if best_eval is not None else 0
-
             # Get material count after move
             mat_after = self.material_count(board)
 
-            # Detect brilliant/great moves
-            is_brilliant = self.detect_brilliance(
-                prev_eval if prev_eval is not None else 0,
-                player_eval if player_eval is not None else 0,
-                prev_mat if prev_mat is not None else mat_before,
-                mat_after,
-                best_eval if best_eval is not None else 0
-            )
-
-            # Detect forced moves
-            is_forced = False
-            if moment.get('move') and best_move:
-                try:
-                    # Reset board to position before move
-                    board = chess.Board(moment['position_fen'])
-                    is_forced = self.detect_forced_move(
-                        board,
-                        moment['move'],
-                        best_move,
-                        player_eval if player_eval is not None else 0,
-                        best_eval if best_eval is not None else 0,
-                        depth
-                    )
-                except Exception as e:
-                    print(f"Error detecting forced move: {e}")
-                    is_forced = False
-
-            # Classify the move
-            accuracy_class = self.classify_move(
-                delta_cp, 
-                is_brilliant=is_brilliant, 
-                is_forced=is_forced
-            )
+            # Detect brilliant/great moves (recalculate for consistency)
+            is_brilliant = accuracy_class == 'Brilliant'
 
             # Update mistake counter for selective analysis
             if accuracy_class in ['Mistake', 'Blunder']:

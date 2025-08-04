@@ -500,8 +500,29 @@ async def sync_platform_games(
         sync_job_id = job_result.data[0]['id']
         print(f"📝 Created sync job: {sync_job_id}")
         
-        # Start background task
-        background_tasks.add_task(process_sync_job, sync_job_id, user_id, request)
+        # Start background task with error handling
+        try:
+            print(f"🚀 Adding background task for sync job {sync_job_id}")
+            
+            # Test with a simple task first
+            def test_task():
+                print(f"🧪 TEST: Simple background task executed for {sync_job_id}")
+            
+            background_tasks.add_task(test_task)
+            print(f"✅ Test task added")
+            
+            background_tasks.add_task(process_sync_job, sync_job_id, user_id, request)
+            print(f"✅ Background tasks added successfully")
+            
+        except Exception as bg_error:
+            print(f"❌ Error adding background task: {bg_error}")
+            import traceback
+            print(f"💥 Background task error traceback:\n{traceback.format_exc()}")
+            
+            # Fallback: run synchronously for now
+            print(f"🔄 Fallback: Running sync synchronously")
+            import asyncio
+            asyncio.create_task(process_sync_job(sync_job_id, user_id, request))
         
         return {
             "message": f"Sync started for {request.platform}",
@@ -519,7 +540,13 @@ async def sync_platform_games(
 
 async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest):
     """Background task to sync and analyze games."""
+    print(f"🔄 Background task started for sync job {sync_job_id}")
+    print(f"   - User ID: {user_id}")
+    print(f"   - Platform: {request.platform}")
+    print(f"   - Username: {request.username}")
+    
     try:
+        print(f"📝 Updating sync job {sync_job_id} status to 'fetching'")
         # Update status to fetching using SyncJobManager
         sync_job_manager.update_sync_job_status(sync_job_id, 'fetching')
         
@@ -551,9 +578,12 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
             games = []
             for i, pgn in enumerate(pgn_games):
                 # Extract basic info from PGN for URL (Chess.com doesn't provide URLs in API)
+                # Use a unique identifier based on PGN content to avoid false duplicates
+                import hashlib
+                pgn_hash = hashlib.md5(pgn.encode()).hexdigest()[:8]
                 game_dict = {
                     'pgn': pgn,
-                    'url': f"https://chess.com/game/{request.username}/{i+1}",  # Placeholder URL
+                    'url': f"https://chess.com/game/{request.username}/{pgn_hash}",  # Unique URL based on PGN content
                     'platform': 'chess.com'
                 }
                 games.append(game_dict)
@@ -576,6 +606,7 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
             raise ValueError(f"Unsupported platform: {request.platform}")
         
         # Filter games based on user preferences
+        print(f"🔍 Pre-filter: {len(games)} games found")
         if request.game_types or request.results or request.colors:
             print(f"🎯 Applying filters: game_types={request.game_types}, results={request.results}, colors={request.colors}")
             filtered_games = []
@@ -584,6 +615,8 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                     filtered_games.append(game)
             games = filtered_games
             print(f"🎯 Filtered to {len(games)} games matching criteria")
+        else:
+            print(f"🎯 No filters applied, keeping all {len(games)} games")
         
         # Update games found using SyncJobManager
         sync_job_manager.update_sync_job_status(sync_job_id, 'analyzing')
@@ -592,16 +625,34 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
         # Analyze games in batches
         analyzer = GameAnalyzer()
         analyzed_count = 0
+        total_errors = 0
+        analysis_errors = []
+        
+        print(f"🎯 Starting analysis of {len(games)} games...")
         
         for i, game in enumerate(games):
+            game_number = i + 1
             try:
+                print(f"🔍 Processing game {game_number}/{len(games)}")
+                
                 # Check if game already analyzed
                 existing = supabase.table('game_analysis').select('id').eq(
                     'user_id', user_id
                 ).eq('game_url', game['url']).execute()
                 
                 if existing.data:
+                    print(f"⏭️ Game {game_number}: Already analyzed, skipping")
                     continue
+                
+                # Validate game has PGN
+                if 'pgn' not in game or not game['pgn']:
+                    error_msg = f"Game {game_number}: Missing PGN data"
+                    print(f"❌ {error_msg}")
+                    analysis_errors.append(error_msg)
+                    total_errors += 1
+                    continue
+                
+                print(f"📝 Game {game_number}: Parsing PGN (length: {len(game['pgn'])})")
                 
                 # Parse and analyze game
                 if request.platform == "chess.com":
@@ -610,42 +661,64 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                     # For Lichess, we need to parse the PGN differently
                     moments = parse_pgn_game(game['pgn'])
                 
-                # DEBUG: Log what we got from parse_pgn_game
-                print(f"🔍 DEBUG Game {i+1}: parse_pgn_game returned type: {type(moments)}")
-                print(f"🔍 DEBUG Game {i+1}: moments value: {moments}")
+                # Enhanced DEBUG logging
+                print(f"🔍 Game {game_number}: parse_pgn_game returned type: {type(moments)}")
                 if isinstance(moments, list):
-                    print(f"🔍 DEBUG Game {i+1}: moments length: {len(moments)}")
+                    print(f"🔍 Game {game_number}: moments length: {len(moments)}")
                     if len(moments) > 0:
-                        print(f"🔍 DEBUG Game {i+1}: first moment type: {type(moments[0])}")
+                        print(f"🔍 Game {game_number}: first moment keys: {list(moments[0].keys()) if isinstance(moments[0], dict) else 'not a dict'}")
+                        print(f"🔍 Game {game_number}: sample moment: {str(moments[0])[:200]}...")
+                else:
+                    error_msg = f"Game {game_number}: parse_pgn_game returned {type(moments)}, expected list"
+                    print(f"❌ {error_msg}")
+                    analysis_errors.append(error_msg)
+                    total_errors += 1
+                    continue
                 
                 # Safety check: ensure moments is a list
                 if not isinstance(moments, list):
-                    print(f"❌ ERROR Game {i+1}: Expected list, got {type(moments)}. Skipping this game.")
+                    error_msg = f"Game {game_number}: Expected list from parse_pgn_game, got {type(moments)}"
+                    print(f"❌ {error_msg}")
+                    analysis_errors.append(error_msg)
+                    total_errors += 1
                     continue
                 
                 if len(moments) == 0:
-                    print(f"⚠️ WARNING Game {i+1}: No moments found in game. Skipping.")
+                    error_msg = f"Game {game_number}: No moments found in PGN"
+                    print(f"⚠️ {error_msg}")
+                    analysis_errors.append(error_msg)
                     continue
                 
                 # Update user_id for all moments
+                print(f"🔧 Game {game_number}: Updating user_id for {len(moments)} moments")
                 for moment in moments:
-                    moment['user_id'] = user_id
+                    if isinstance(moment, dict):
+                        moment['user_id'] = user_id
+                    else:
+                        error_msg = f"Game {game_number}: Invalid moment type {type(moment)}"
+                        print(f"❌ {error_msg}")
+                        analysis_errors.append(error_msg)
+                        raise Exception(error_msg)
                 
                 # Get user rating for selective analysis
                 try:
                     user_result = supabase.table('users').select('rating').eq('id', user_id).execute()
                     user_rating = user_result.data[0]['rating'] if user_result.data else 1500
-                except:
+                    print(f"👤 Game {game_number}: User rating: {user_rating}")
+                except Exception as e:
+                    print(f"⚠️ Game {game_number}: Could not get user rating, using default: {e}")
                     user_rating = 1500  # Default rating
                 
-                print(f"🔍 DEBUG Game {i+1}: About to call analyze_game_moments with:")
-                print(f"   - moments: {type(moments)} with {len(moments)} items")
+                print(f"🧠 Game {game_number}: Starting AI analysis...")
+                print(f"   - moments: {len(moments)} positions")
                 print(f"   - depth: 12")
                 print(f"   - user_rating: {user_rating}")
                 print(f"   - user_level: intermediate")
                 
                 # Use batch processing with selective criteria - HOTFIX APPLIED
                 from hotfix_batch_processing import safe_analyze_game_moments
+                
+                print(f"🔄 Game {game_number}: Calling safe_analyze_game_moments...")
                 analyzed_moments = safe_analyze_game_moments(
                     analyzer,
                     moments, 
@@ -653,6 +726,8 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                     user_rating=user_rating,
                     user_level="intermediate"
                 )
+                
+                print(f"✅ Game {game_number}: Analysis completed, got {len(analyzed_moments) if analyzed_moments else 0} analyzed moments")
                 
                 # Extract enhanced metadata from PGN
                 from utils.db_batch import extract_pgn_headers, calculate_game_statistics, generate_analysis_summary
@@ -726,18 +801,60 @@ async def process_sync_job(sync_job_id: str, user_id: str, request: SyncRequest)
                         # Continue processing even if Pinecone upload fails
                 
             except Exception as game_error:
-                print(f"Error analyzing game {i+1}: {game_error}")
+                error_msg = f"Game {game_number}: Analysis failed - {str(game_error)}"
+                print(f"❌ {error_msg}")
+                analysis_errors.append(error_msg)
+                total_errors += 1
+                
                 import traceback
-                print(f"Full traceback: {traceback.format_exc()}")
+                full_trace = traceback.format_exc()
+                print(f"💥 Game {game_number}: Full traceback:\n{full_trace}")
+                
+                # Log error details for debugging
+                print(f"🔍 Game {game_number}: Error details:")
+                print(f"   - Error type: {type(game_error).__name__}")
+                print(f"   - Error message: {str(game_error)}")
+                print(f"   - Game URL: {game.get('url', 'Unknown')}")
+                print(f"   - PGN length: {len(game.get('pgn', ''))}")
+                
                 continue
         
-        # Final status update using SyncJobManager
-        sync_job_manager.update_sync_job_status(sync_job_id, 'completed')
+        # Final status update with comprehensive results
+        print(f"\n📊 Sync job {sync_job_id} completed:")
+        print(f"   - Games found: {len(games)}")
+        print(f"   - Games analyzed: {analyzed_count}")
+        print(f"   - Total errors: {total_errors}")
+        
+        if total_errors > 0:
+            error_summary = f"Analyzed {analyzed_count}/{len(games)} games. {total_errors} errors: " + "; ".join(analysis_errors[:3])
+            if len(analysis_errors) > 3:
+                error_summary += f" (and {len(analysis_errors)-3} more)"
+            
+            print(f"⚠️ Sync completed with errors: {error_summary}")
+            sync_job_manager.update_sync_job_status(
+                sync_job_id, 
+                'completed', 
+                error=error_summary[:500]  # Limit error message length
+            )
+        else:
+            print(f"✅ Sync completed successfully")
+            sync_job_manager.update_sync_job_status(sync_job_id, 'completed')
         
     except Exception as e:
-        # Update job with error using SyncJobManager
-        sync_job_manager.update_sync_job_status(sync_job_id, 'failed', error=str(e))
-        print(f"Sync job {sync_job_id} failed: {e}")
+        # Enhanced error reporting
+        error_details = f"Sync failed: {str(e)}"
+        print(f"💥 Sync job {sync_job_id} failed: {error_details}")
+        
+        import traceback
+        full_trace = traceback.format_exc()
+        print(f"💥 Full error traceback:\n{full_trace}")
+        
+        # Update job with detailed error using SyncJobManager
+        sync_job_manager.update_sync_job_status(
+            sync_job_id, 
+            'failed', 
+            error=error_details[:500]  # Limit error message length
+        )
 
 @app.get("/sync-status/{sync_job_id}")
 async def get_sync_status(sync_job_id: str, current_user: User = Depends(get_current_user)):
