@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle } from "lucide-react"
+import { Upload, ExternalLink, BarChart3, Clock, Trophy, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { useToast } from '@/hooks/useToast'
 import { SyncGamesDialog } from "@/components/SyncGamesDialog"
 import { ChessBoard } from "@/components/ChessBoard"
@@ -41,6 +41,7 @@ export function Analyze() {
   const [loading, setLoading] = useState(true)
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1)
+  const [expandedMoments, setExpandedMoments] = useState<Set<number>>(new Set())
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -439,10 +440,198 @@ export function Analyze() {
                 </TabsContent>
 
                 <TabsContent value="moments" className="space-y-3">
+                  {(() => {
+                    // Filter moves for key moments (significant moves only)
+                    const keyMoments = gameAnalysis.moves?.filter(move => 
+                      ['Brilliant', 'Blunder', 'Mistake', 'Best', 'Checkmate'].includes(move.accuracy)
+                    ) || []
+
+                    if (keyMoments.length === 0) {
+                      return (
                   <div className="text-center py-8 text-muted-foreground">
-                    <p>Critical moments classification has been removed.</p>
-                    <p>Use the Board tab to review your moves.</p>
+                          <p>No key moments found in this game.</p>
+                          <p>All moves were balanced or inaccuracies.</p>
+                        </div>
+                      )
+                    }
+
+                    const getAccuracyBadgeColor = (accuracy: string) => {
+                      switch (accuracy) {
+                        case 'Brilliant': return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200'
+                        case 'Best': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        case 'Checkmate': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                        case 'Blunder': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                        case 'Mistake': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                      }
+                    }
+
+                    const getMoveTypeIcon = (accuracy: string) => {
+                      switch (accuracy) {
+                        case 'Brilliant': return '✨'
+                        case 'Best': return '🎯'
+                        case 'Checkmate': return '♔'
+                        case 'Blunder': return '💥'
+                        case 'Mistake': return '⚠️'
+                        default: return '📍'
+                      }
+                    }
+
+                    const getTacticType = (accuracy: string) => {
+                      if (accuracy === 'Checkmate') return 'Checkmate'
+                      if (accuracy === 'Brilliant') return 'Tactical Shot'
+                      if (accuracy === 'Best') return 'Strong Move'
+                      if (accuracy === 'Blunder') return 'Critical Error'
+                      if (accuracy === 'Mistake') return 'Inaccurate Play'
+                      return 'Key Position'
+                    }
+
+                    const toggleExpanded = (index: number) => {
+                      const newExpanded = new Set(expandedMoments)
+                      if (newExpanded.has(index)) {
+                        newExpanded.delete(index)
+                      } else {
+                        newExpanded.add(index)
+                      }
+                      setExpandedMoments(newExpanded)
+                    }
+
+                    return (
+                      <div className="space-y-2">
+                        {keyMoments.map((moment, index) => {
+                          const isExpanded = expandedMoments.has(index)
+                          
+                          return (
+                            <Card key={index} className="overflow-hidden">
+                              {/* Collapsed Summary - Always Visible */}
+                              <div 
+                                className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                                onClick={() => toggleExpanded(index)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0">
+                                      {isExpanded ? (
+                                        <ChevronUp className="h-5 w-5 text-gray-500" />
+                                      ) : (
+                                        <ChevronDown className="h-5 w-5 text-gray-500" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="font-semibold">Move {moment.moveNumber}: {moment.move}</h3>
+                                        <Badge className={getAccuracyBadgeColor(moment.accuracy)}>
+                                          {getMoveTypeIcon(moment.accuracy)} {moment.accuracy}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                        <span>Evaluation: {moment.evaluation > 0 ? '+' : ''}{(moment.evaluation / 100).toFixed(2)}</span>
+                                        <span>{getTacticType(moment.accuracy)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Click to {isExpanded ? 'collapse' : 'expand'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Expanded Content - Only When Expanded */}
+                              {isExpanded && (
+                                <div className="border-t bg-gray-50 dark:bg-gray-900/50">
+                                  <div className="p-6">
+                                    <div className="grid lg:grid-cols-2 gap-8">
+                                      {/* Chess Position */}
+                                      <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                          <h4 className="font-medium text-lg">Position</h4>
+                                          <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              setCurrentMoveIndex(moment.moveNumber - 1)
+                                              const boardTab = document.querySelector('[value="board"]') as HTMLElement
+                                              boardTab?.click()
+                                            }}
+                                          >
+                                            View on Main Board
+                                          </Button>
+                                        </div>
+                                        <div className="flex justify-center">
+                                          <div className="w-full max-w-md aspect-square border rounded-lg bg-white dark:bg-gray-800 p-2">
+                                            <div className="w-full h-full">
+                                              <ChessBoard 
+                                                pgn={gameAnalysis.pgn || selectedGame?.pgn || ''}
+                                                userColor={getUserColor(gameAnalysis)}
+                                                currentMoveIndex={moment.moveNumber - 1}
+                                                className="w-full h-full"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* AI Commentary */}
+                                      <div className="space-y-4">
+                                        <h4 className="font-medium text-lg">AI Analysis</h4>
+                                        <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+                                          <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                              AI
+                                            </div>
+                                            <div className="space-y-3 min-w-0">
+                                              <p className="text-sm leading-relaxed">
+                                                {moment.comment || `This ${moment.accuracy.toLowerCase()} move occurred at move ${moment.moveNumber}. ${
+                                                  moment.accuracy === 'Brilliant' ? 'Excellent calculation and tactical vision!' :
+                                                  moment.accuracy === 'Best' ? 'The strongest move in the position.' :
+                                                  moment.accuracy === 'Checkmate' ? 'Game decisive! Perfect execution.' :
+                                                  moment.accuracy === 'Blunder' ? 'A significant error that changes the evaluation dramatically.' :
+                                                  moment.accuracy === 'Mistake' ? 'An inaccurate move that gives the opponent an advantage.' :
+                                                  'A critical moment in the game.'
+                                                }`}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Move Details */}
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border">
+                                          <h5 className="font-medium mb-3">Move Details</h5>
+                                          <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Move Number:</span>
+                                              <span className="font-medium">{moment.moveNumber}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Move Notation:</span>
+                                              <span className="font-medium font-mono">{moment.move}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Evaluation:</span>
+                                              <span className="font-medium">{moment.evaluation > 0 ? '+' : ''}{(moment.evaluation / 100).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Classification:</span>
+                                              <span className="font-medium">{moment.accuracy}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">Tactic Type:</span>
+                                              <span className="font-medium">{getTacticType(moment.accuracy)}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </Card>
+                          )
+                        })}
                   </div>
+                    )
+                  })()}
                 </TabsContent>
 
                 <TabsContent value="coach" className="space-y-4">
